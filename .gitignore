@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Poetry
+dist/
+
+# Env / secrets
+.env
+.env.*
+
+# SQLite
+*.db
+*.sqlite3
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store

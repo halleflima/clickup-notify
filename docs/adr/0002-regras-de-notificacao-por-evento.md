@@ -1,0 +1,40 @@
+# ADR-0002: Regras de notificação por tipo de evento
+
+## Status
+Aceito
+
+## Contexto
+O ClickUp pode emitir um grande número de tipos de evento via webhook. Notificar em cima de todos eles geraria spam e reduziria a atenção real às notificações que importam. Foi necessário restringir o escopo a quatro tipos de evento e definir, para cada um, quem recebe a notificação.
+
+O campo "solicitante" de um chamado no ClickUp é um campo obrigatório do tipo pessoa (person picker) — ou seja, referencia um usuário real do ClickUp com um ID, da mesma forma que o campo "responsável" (assignee). Isso permite resolver o solicitante pela mesma lógica de ID usada para o responsável (ver [ADR-0003](0003-mapeamento-de-identidade-clickup-email.md)).
+
+## Decisão
+Eventos monitorados nesta fase e suas regras de notificação:
+
+1. **Chamado criado**
+   - Notifica sempre o solicitante.
+   - Notifica o responsável somente se já houver alguém atribuído no momento da criação.
+
+2. **Novo comentário adicionado**
+   - Notifica todos os envolvidos (responsável e solicitante).
+   - Exceção: o autor do comentário nunca é notificado do próprio comentário.
+   - Conteúdo do email é propositalmente minimalista (ex: "novo comentário adicionado no chamado X"), sem trecho do comentário — o objetivo é forçar o usuário a entrar no ClickUp para gerenciar o chamado, não substituir a ferramenta.
+
+3. **Mudança de status** (ex: entrar em "a fazer", "desenvolvimento", "bloqueado")
+   - Notifica responsável e solicitante.
+   - Regra simétrica de supressão por ator: quem executou a própria mudança de status não é notificado dela. Se foi o responsável quem mudou, ele não recebe; se foi o solicitante, o mesmo vale para ele.
+   - O conteúdo do email mostra explicitamente o status anterior e o novo (ex: "o chamado X foi alterado de Em Desenvolvimento para Testes"), extraídos de `history_items[].before`/`.after` (ver [ADR-0006](0006-seguranca-do-webhook-e-idempotencia.md)).
+   - O formato do email é único e padrão para qualquer transição de status. Existe um campo opcional de **observação** no template, preenchido a partir de um dicionário simples hardcoded no código (ex: `{"reanálise": "este chamado precisa ser analisado, por favor acesse o ClickUp"}`), não uma tabela no banco — hoje só 1-2 status (ex: "reanálise", possivelmente "bloqueado") precisam desse texto extra, e uma tabela com CRUD seria estrutura demais pra esse volume. Quando não há observação mapeada para o status em questão, o campo simplesmente não aparece no email — o formato do email nunca muda, só o conteúdo desse bloco opcional. Se essa lista crescer ou precisar ser editada por alguém sem acesso ao código, migrar para uma tabela (mesmo padrão do `mapeamentos_email`) é uma extensão simples, sem mudar o template.
+   - A granularidade exata dos status que disparam notificação (todos os status vs. só alguns) fica aberta para refinamento futuro.
+
+4. **Responsável atribuído ou removido de um chamado já existente** (`taskAssigneeUpdated`)
+   - Ao adicionar um responsável: notifica só a pessoa recém-atribuída (ex: "você foi atribuído ao chamado X"). O solicitante não é notificado nesse evento (já é coberto pelas notificações de status).
+   - Ao remover um responsável: notifica a pessoa removida (ex: "você foi desvinculado do chamado X").
+   - Mesma regra simétrica de supressão por ator: se alguém se auto-atribui ou se auto-remove, não recebe notificação da própria ação.
+   - ClickUp permite múltiplos responsáveis por tarefa; se uma única mudança adicionar e/ou remover mais de uma pessoa, é enviada uma notificação individual por pessoa afetada (não uma notificação agregada por chamado).
+
+Cada tipo de evento usa um template de email genérico comum, com um bloco de conteúdo que varia por tipo de evento — não templates totalmente independentes por evento (ver [ADR-0004](0004-modelo-de-envio-outbox-retry-e-retencao.md) para o mecanismo de envio).
+
+## Consequências
+- Fácil de estender para outros eventos ou sub-casos de status no futuro, sem mudar a arquitetura de envio.
+- Depende de o campo "solicitante" continuar sendo um person picker no ClickUp; se isso mudar (ex: virar campo de texto livre), a resolução por ID deixa de funcionar e precisa ser revisitada.
