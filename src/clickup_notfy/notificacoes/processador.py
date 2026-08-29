@@ -4,8 +4,20 @@ from clickup_notfy.notificacoes import conteudo, email_sender, outbox_repository
 
 
 def _extrair_pessoas(valores) -> list[dict]:
+    """Normaliza before/after de taskAssigneeUpdated.
+
+    Confirmado em producao: para uma unica pessoa adicionada/removida, o
+    ClickUp manda um objeto unico (nao uma lista) - ex: {"id": 123, ...}.
+    So vem como lista quando mais de uma pessoa muda de uma vez. Tratar so
+    o caso lista quebra silenciosamente (itera as CHAVES do dict).
+    """
+    if valores is None:
+        return []
+    if isinstance(valores, dict):
+        valores = [valores]
+
     pessoas = []
-    for valor in valores or []:
+    for valor in valores:
         if isinstance(valor, dict):
             pessoas.append({"id": valor["id"], "email": valor.get("email"), "nome": valor.get("username")})
         else:

@@ -161,3 +161,46 @@ def test_processa_atribuicao_nao_chama_api_do_clickup(conexao):
 
     notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
     assert notificacoes[0]["destinatario_email"] == "ciclano@empresa.com"
+
+
+def test_processa_atribuicao_com_after_como_objeto_unico_nao_lista(conexao):
+    """Formato real confirmado em producao: para 1 pessoa, o ClickUp manda
+    um objeto, nao uma lista - iterar isso como lista quebra silenciosamente
+    (itera as chaves do dict) se nao for tratado."""
+    item = {
+        "id": "hist-3",
+        "tipo_evento": "taskAssigneeUpdated",
+        "task_id": "abc123",
+        "autor_id": 999,
+        "before": None,
+        "after": {"id": 222, "username": "Ciclano", "email": "ciclano@gmail.com"},
+    }
+
+    with responses.RequestsMock():
+        processar_evento(conexao, item, CONFIG)
+
+    notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
+    assert len(notificacoes) == 1
+    assert notificacoes[0]["destinatario_email"] == "ciclano@gmail.com"
+
+    mapeamento = mapeamentos_repository.buscar_por_id(conexao, 222)
+    assert mapeamento["nome"] == "Ciclano"
+
+
+def test_processa_autoatribuicao_com_after_como_objeto_unico_e_suprimida(conexao):
+    """Mesmo cenario, mas quem se atribui e o proprio autor da acao - nao
+    deve gerar nenhuma notificacao (regra de supressao por ator)."""
+    item = {
+        "id": "hist-4",
+        "tipo_evento": "taskAssigneeUpdated",
+        "task_id": "abc123",
+        "autor_id": 222,
+        "before": None,
+        "after": {"id": 222, "username": "Ciclano", "email": "ciclano@gmail.com"},
+    }
+
+    with responses.RequestsMock():
+        processar_evento(conexao, item, CONFIG)
+
+    notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
+    assert notificacoes == []
