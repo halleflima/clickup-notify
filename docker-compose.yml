@@ -1,0 +1,15 @@
+services:
+  clickup-notfy:
+    build: .
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_PATH=/data/clickup_notfy.db
+    volumes:
+      - clickup_notfy_dados:/data
+    restart: unless-stopped
+
+volumes:
+  clickup_notfy_dados:
