@@ -22,6 +22,11 @@ Gerenciamento via rotas de API REST (CRUD: criar, listar, atualizar, desativar),
 
 Quando um evento do ClickUp referencia um `clickup_user_id` sem mapeamento ativo cadastrado, o comportamento de fallback está definido em [ADR-0004](0004-modelo-de-envio-outbox-retry-e-retencao.md).
 
+**Auto-cadastro no primeiro evento (bootstrap sem script à parte)**: em vez de exigir que alguém cadastre manualmente todo o time antes de começar a usar o serviço, quando um destinatário resolvido (responsável, solicitante, ou atribuição) não tem nenhum registro em `mapeamentos_email`, o serviço cria automaticamente um mapeamento usando o email e o nome que a própria API do ClickUp devolve (`assignees[].email`/`username`, ou o mesmo campo dentro do custom field "Solicitante") — com `official_email` = mesmo email do ClickUp, como placeholder. Isso não piora nada (é exatamente pra onde a notificação iria antes de existir esse serviço), só evita bloquear o fluxo por falta de cadastro. A pessoa que administra o serviço então usa `GET /mapeamentos-email` pra ver quem foi auto-cadastrado e corrige o `official_email` de cada um via `PATCH /mapeamentos-email/<id>` conforme for confirmando quem é quem.
+
+Esse auto-cadastro só acontece quando **não existe registro algum** para aquele `clickup_user_id` — se o registro existe mas está com `ativo: false` (alguém desativado deliberadamente, ex: saiu da empresa), o serviço não reativa sozinho; cai no fallback normal (ADR-0004). Também só é possível quando a fonte do evento tem o email disponível (chamadas que passam pela API de tarefa do ClickUp) — no evento `taskAssigneeUpdated`, cujo formato exato de `before`/`after` ainda não foi confirmado em produção, se o email não vier disponível, cai no fallback em vez de criar um mapeamento incompleto.
+
 ## Consequências
-- Cadastro precisa de disciplina manual: quando alguém entra, sai ou troca de conta no ClickUp, o mapeamento deve ser atualizado via API.
+- Reduz o trabalho de bootstrap inicial: o time vai sendo cadastrado sozinho conforme os primeiros eventos chegam, sem precisar de um script de importação em massa.
+- Ainda depende de disciplina manual para *corrigir* o `official_email` de cada auto-cadastro (o placeholder é só o email pessoal do ClickUp, o mesmo problema que o serviço existe pra resolver) e para lidar com saída/troca de conta de alguém.
 - Resolver o mapeamento por ID (em vez de email) exige que os eventos recebidos do webhook sempre tragam o ID do usuário do ClickUp — confirmado como disponível no payload.

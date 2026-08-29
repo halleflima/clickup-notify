@@ -2,7 +2,9 @@ import responses
 
 from clickup_notfy.clickup_api import (
     buscar_tarefa,
+    extrair_responsaveis,
     extrair_responsaveis_ids,
+    extrair_solicitante,
     extrair_solicitante_id,
 )
 
@@ -62,3 +64,30 @@ def test_extrair_solicitante_id_campo_ausente_retorna_none():
 
 def test_extrair_solicitante_id_sem_custom_fields_retorna_none():
     assert extrair_solicitante_id({}) is None
+
+
+def test_extrair_responsaveis_traz_email_e_nome():
+    tarefa = {"assignees": [{"id": 111, "username": "fulano", "email": "fulano@gmail.com"}]}
+
+    assert extrair_responsaveis(tarefa) == [
+        {"id": 111, "email": "fulano@gmail.com", "nome": "fulano"}
+    ]
+
+
+def test_extrair_solicitante_traz_email_e_nome():
+    tarefa = {
+        "custom_fields": [
+            {
+                "name": "Solicitante",
+                "value": [{"id": 333, "username": "ciclano", "email": "ciclano@gmail.com"}],
+            }
+        ]
+    }
+
+    assert extrair_solicitante(tarefa) == {"id": 333, "email": "ciclano@gmail.com", "nome": "ciclano"}
+
+
+def test_extrair_solicitante_sem_email_retorna_none_no_campo():
+    tarefa = {"custom_fields": [{"name": "Solicitante", "value": {"id": 333}}]}
+
+    assert extrair_solicitante(tarefa) == {"id": 333, "email": None, "nome": None}

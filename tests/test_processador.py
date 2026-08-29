@@ -61,7 +61,7 @@ def test_processa_criacao_usa_email_do_mapeamento(conexao):
 
 
 @responses.activate
-def test_processa_criacao_sem_mapeamento_usa_fallback(conexao):
+def test_processa_criacao_sem_mapeamento_e_sem_email_usa_fallback(conexao):
     responses.add(
         responses.GET,
         "https://api.clickup.com/api/v2/task/abc123",
@@ -73,6 +73,59 @@ def test_processa_criacao_sem_mapeamento_usa_fallback(conexao):
 
     notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
     assert notificacoes[0]["destinatario_email"] == "fallback@empresa.com"
+
+
+@responses.activate
+def test_processa_criacao_sem_mapeamento_mas_com_email_auto_cadastra(conexao):
+    responses.add(
+        responses.GET,
+        "https://api.clickup.com/api/v2/task/abc123",
+        json={
+            "assignees": [],
+            "custom_fields": [
+                {
+                    "name": "Solicitante",
+                    "value": {"id": 555, "username": "novato", "email": "novato@gmail.com"},
+                }
+            ],
+        },
+        status=200,
+    )
+
+    processar_evento(conexao, item_criacao(), CONFIG)
+
+    notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
+    assert notificacoes[0]["destinatario_email"] == "novato@gmail.com"
+
+    mapeamento = mapeamentos_repository.buscar_por_id(conexao, 555)
+    assert mapeamento["clickup_email"] == "novato@gmail.com"
+    assert mapeamento["official_email"] == "novato@gmail.com"
+    assert mapeamento["nome"] == "novato"
+    assert mapeamento["ativo"] is True
+
+
+@responses.activate
+def test_processa_criacao_reusa_mapeamento_auto_cadastrado_na_segunda_vez(conexao):
+    responses.add(
+        responses.GET,
+        "https://api.clickup.com/api/v2/task/abc123",
+        json={
+            "assignees": [],
+            "custom_fields": [
+                {
+                    "name": "Solicitante",
+                    "value": {"id": 555, "username": "novato", "email": "novato@gmail.com"},
+                }
+            ],
+        },
+        status=200,
+    )
+
+    processar_evento(conexao, item_criacao(evento_id="hist-1"), CONFIG)
+    processar_evento(conexao, item_criacao(evento_id="hist-2"), CONFIG)
+
+    mapeamentos = mapeamentos_repository.listar(conexao)
+    assert len(mapeamentos) == 1
 
 
 @responses.activate
