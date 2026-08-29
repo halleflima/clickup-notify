@@ -1,0 +1,20 @@
+[project]
+name = "clickup-notfy"
+version = "0.1.0"
+description = "Microservico que traduz eventos do ClickUp para notificacoes por email no endereco corporativo oficial de cada colaborador."
+authors = [{ name = "Hallef" }]
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "flask (>=3.0.0,<4.0.0)",
+    "python-dotenv (>=1.0.0,<2.0.0)",
+]
+
+[tool.poetry]
+packages = [{ include = "clickup_notfy", from = "src" }]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"
