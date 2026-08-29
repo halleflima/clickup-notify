@@ -17,36 +17,41 @@ def _mapa_pessoas(pessoas: list[dict]) -> dict[int, dict]:
     return {pessoa["id"]: pessoa for pessoa in pessoas}
 
 
-def resolver_contexto_evento(item: dict, config) -> tuple[list[dict], dict[int, dict]]:
-    """Resolve quem deve ser notificado e o que se sabe (email/nome) de cada um."""
-    tipo_evento = item["tipo_evento"]
+def _resolver_contexto_atribuicao(item: dict) -> tuple[list[dict], dict[int, dict]]:
+    pessoas_antes = _extrair_pessoas(item["before"])
+    pessoas_depois = _extrair_pessoas(item["after"])
 
-    if tipo_evento == "taskAssigneeUpdated":
-        pessoas_antes = _extrair_pessoas(item["before"])
-        pessoas_depois = _extrair_pessoas(item["after"])
-        destinatarios = regras.resolver_destinatarios_atribuicao(
-            autor_id=item["autor_id"],
-            responsaveis_ids_antes=[p["id"] for p in pessoas_antes],
-            responsaveis_ids_depois=[p["id"] for p in pessoas_depois],
-        )
-        return destinatarios, _mapa_pessoas(pessoas_antes + pessoas_depois)
+    destinatarios = regras.resolver_destinatarios_atribuicao(
+        autor_id=item["autor_id"],
+        responsaveis_ids_antes=[pessoa["id"] for pessoa in pessoas_antes],
+        responsaveis_ids_depois=[pessoa["id"] for pessoa in pessoas_depois],
+    )
+    return destinatarios, _mapa_pessoas(pessoas_antes + pessoas_depois)
 
+
+def _resolver_contexto_via_tarefa(item: dict, config) -> tuple[list[dict], dict[int, dict]]:
     tarefa = clickup_api.buscar_tarefa(item["task_id"], config["CLICKUP_API_TOKEN"])
     responsaveis = clickup_api.extrair_responsaveis(tarefa)
     solicitante = clickup_api.extrair_solicitante(tarefa)
-    responsaveis_ids = [r["id"] for r in responsaveis]
+    responsaveis_ids = [responsavel["id"] for responsavel in responsaveis]
     solicitante_id = solicitante["id"] if solicitante else None
-
     pessoas_conhecidas = _mapa_pessoas(responsaveis + ([solicitante] if solicitante else []))
 
-    if tipo_evento == "taskCreated":
+    if item["tipo_evento"] == "taskCreated":
         destinatarios = regras.resolver_destinatarios_criacao(solicitante_id, responsaveis_ids)
-    else:
-        destinatarios = regras.resolver_destinatarios_envolvidos(
-            item["autor_id"], solicitante_id, responsaveis_ids
-        )
+        return destinatarios, pessoas_conhecidas
 
+    destinatarios = regras.resolver_destinatarios_envolvidos(
+        item["autor_id"], solicitante_id, responsaveis_ids
+    )
     return destinatarios, pessoas_conhecidas
+
+
+def resolver_contexto_evento(item: dict, config) -> tuple[list[dict], dict[int, dict]]:
+    """Resolve quem deve ser notificado e o que se sabe (email/nome) de cada um."""
+    if item["tipo_evento"] == "taskAssigneeUpdated":
+        return _resolver_contexto_atribuicao(item)
+    return _resolver_contexto_via_tarefa(item, config)
 
 
 def _resolver_email_destino(conexao, clickup_user_id: int, pessoa_info: dict | None, config) -> str:
