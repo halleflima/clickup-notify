@@ -12,8 +12,14 @@ def conexao():
     conexao.close()
 
 
+def criar_pendente(conexao, evento_id, destinatario_email, tipo_evento="taskCreated"):
+    return outbox_repository.criar_pendente(
+        conexao, evento_id, destinatario_email, tipo_evento, "Assunto", "Corpo"
+    )
+
+
 def test_criar_pendente_fica_com_status_pendente(conexao):
-    notificacao_id = outbox_repository.criar_pendente(conexao, "hist-1", "a@empresa.com", "taskCreated")
+    notificacao_id = criar_pendente(conexao, "hist-1", "a@empresa.com")
 
     linha = conexao.execute(
         "SELECT * FROM notificacoes_enviadas WHERE id = ?", (notificacao_id,)
@@ -21,10 +27,12 @@ def test_criar_pendente_fica_com_status_pendente(conexao):
 
     assert linha["status"] == "pendente"
     assert linha["tentativas"] == 0
+    assert linha["assunto"] == "Assunto"
+    assert linha["corpo"] == "Corpo"
 
 
 def test_registrar_sucesso_marca_como_enviado(conexao):
-    notificacao_id = outbox_repository.criar_pendente(conexao, "hist-1", "a@empresa.com", "taskCreated")
+    notificacao_id = criar_pendente(conexao, "hist-1", "a@empresa.com")
 
     outbox_repository.registrar_resultado_envio(conexao, notificacao_id, sucesso=True)
 
@@ -37,7 +45,7 @@ def test_registrar_sucesso_marca_como_enviado(conexao):
 
 
 def test_registrar_falha_mantem_pendente_e_incrementa_tentativas(conexao):
-    notificacao_id = outbox_repository.criar_pendente(conexao, "hist-1", "a@empresa.com", "taskCreated")
+    notificacao_id = criar_pendente(conexao, "hist-1", "a@empresa.com")
 
     outbox_repository.registrar_resultado_envio(conexao, notificacao_id, sucesso=False)
 
@@ -50,10 +58,12 @@ def test_registrar_falha_mantem_pendente_e_incrementa_tentativas(conexao):
 
 
 def test_listar_pendentes_ignora_enviados(conexao):
-    id_pendente = outbox_repository.criar_pendente(conexao, "hist-1", "a@empresa.com", "taskCreated")
-    id_enviado = outbox_repository.criar_pendente(conexao, "hist-2", "b@empresa.com", "taskCreated")
+    id_pendente = criar_pendente(conexao, "hist-1", "a@empresa.com")
+    id_enviado = criar_pendente(conexao, "hist-2", "b@empresa.com")
     outbox_repository.registrar_resultado_envio(conexao, id_enviado, sucesso=True)
 
     pendentes = outbox_repository.listar_pendentes(conexao)
 
     assert [p["id"] for p in pendentes] == [id_pendente]
+    assert pendentes[0]["assunto"] == "Assunto"
+    assert pendentes[0]["corpo"] == "Corpo"
