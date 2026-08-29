@@ -1,11 +1,15 @@
 import json
+import logging
 
 from flask import Blueprint, current_app, request
 
 from clickup_notfy import db
+from clickup_notfy.notificacoes.processador import processar_evento
 from clickup_notfy.webhook.dedup import evento_ja_processado, registrar_evento
 from clickup_notfy.webhook.parser import extrair_itens_historico
 from clickup_notfy.webhook.security import assinatura_valida
+
+logger = logging.getLogger(__name__)
 
 webhook_bp = Blueprint("webhook", __name__)
 
@@ -27,6 +31,13 @@ def receber_evento_clickup():
         for item in itens:
             if evento_ja_processado(conexao, item["id"]):
                 continue
+
+            try:
+                processar_evento(conexao, item, current_app.config)
+            except Exception:
+                logger.exception("Falha ao processar evento %s, sera reprocessado no proximo retry do ClickUp", item["id"])
+                return {"erro": "falha ao processar evento"}, 502
+
             registrar_evento(
                 conexao,
                 evento_id=item["id"],

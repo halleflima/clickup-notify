@@ -18,6 +18,22 @@ CREATE TABLE IF NOT EXISTS mapeamentos_email (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS notificacoes_enviadas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    evento_id TEXT NOT NULL,
+    destinatario_email TEXT NOT NULL,
+    tipo_evento TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pendente',
+    tentativas INTEGER NOT NULL DEFAULT 0,
+    enviado_em TEXT,
+    aberto INTEGER NOT NULL DEFAULT 0,
+    aberto_em TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_notificacoes_status ON notificacoes_enviadas (status);
+CREATE INDEX IF NOT EXISTS idx_notificacoes_created_at ON notificacoes_enviadas (created_at);
 """
 
 
