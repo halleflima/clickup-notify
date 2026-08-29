@@ -173,7 +173,11 @@ def test_processa_atribuicao_com_after_como_objeto_unico_nao_lista(conexao):
         "task_id": "abc123",
         "autor_id": 999,
         "before": None,
-        "after": {"id": 222, "username": "Ciclano", "email": "ciclano@gmail.com"},
+        "after": {
+            "id": 222,
+            "username": "Ciclano",
+            "email": "ciclano@gmail.com",
+        },
     }
 
     with responses.RequestsMock():
@@ -196,7 +200,11 @@ def test_processa_autoatribuicao_com_after_como_objeto_unico_e_suprimida(conexao
         "task_id": "abc123",
         "autor_id": 222,
         "before": None,
-        "after": {"id": 222, "username": "Ciclano", "email": "ciclano@gmail.com"},
+        "after": {
+            "id": 222,
+            "username": "Ciclano",
+            "email": "ciclano@gmail.com",
+        },
     }
 
     with responses.RequestsMock():
