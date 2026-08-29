@@ -6,6 +6,13 @@ quem deve ser notificado. Construcao de conteudo de email e envio ficam
 para uma etapa posterior (outbox).
 """
 
+EVENTOS_SUPORTADOS = {
+    "taskCreated",
+    "taskStatusUpdated",
+    "taskCommentPosted",
+    "taskAssigneeUpdated",
+}
+
 
 def resolver_destinatarios_criacao(
     solicitante_id: int | None, responsaveis_ids: list[int]

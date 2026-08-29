@@ -6,6 +6,8 @@ Aceito
 ## Contexto
 O ClickUp pode emitir um grande número de tipos de evento via webhook. Notificar em cima de todos eles geraria spam e reduziria a atenção real às notificações que importam. Foi necessário restringir o escopo a quatro tipos de evento e definir, para cada um, quem recebe a notificação.
 
+Na configuração real do webhook (feita pela interface do ClickUp), selecionar "todos os eventos" resulta em `events: []` na resposta da API — ou seja, mesmo tendo decidido notificar só 4 tipos, o webhook pode acabar inscrito em *todos* os eventos do workspace (criação/exclusão de lista, pasta, espaço, meta, etc.). O código não pode assumir que só vai receber os 4 tipos que nos interessam.
+
 O campo "solicitante" de um chamado no ClickUp é um campo obrigatório do tipo pessoa (person picker) — ou seja, referencia um usuário real do ClickUp com um ID, da mesma forma que o campo "responsável" (assignee). Isso permite resolver o solicitante pela mesma lógica de ID usada para o responsável (ver [ADR-0003](0003-mapeamento-de-identidade-clickup-email.md)).
 
 ## Decisão
@@ -35,6 +37,9 @@ Eventos monitorados nesta fase e suas regras de notificação:
 
 Cada tipo de evento usa um template de email genérico comum, com um bloco de conteúdo que varia por tipo de evento — não templates totalmente independentes por evento (ver [ADR-0004](0004-modelo-de-envio-outbox-retry-e-retencao.md) para o mecanismo de envio).
 
+**Filtro de segurança contra eventos fora do escopo**: `regras.EVENTOS_SUPORTADOS` lista os 4 tipos acima. Qualquer evento recebido fora dessa lista (ex: `folderCreated`, `spaceDeleted`, `goalUpdated`) é ignorado antes de qualquer chamada à API do ClickUp ou tentativa de montar notificação — a requisição do webhook ainda responde 200 normalmente, só não gera nenhum outbox. Isso é necessário como camada de defesa mesmo com o webhook do ClickUp configurado só para os 4 eventos, porque a interface do ClickUp representa "todos os eventos" como `events: []` na API (é fácil cadastrar o webhook errado sem perceber), e também protege contra o ClickUp adicionar novos tipos de evento no futuro.
+
 ## Consequências
 - Fácil de estender para outros eventos ou sub-casos de status no futuro, sem mudar a arquitetura de envio.
 - Depende de o campo "solicitante" continuar sendo um person picker no ClickUp; se isso mudar (ex: virar campo de texto livre), a resolução por ID deixa de funcionar e precisa ser revisitada.
+- Eventos fora do escopo nunca geram chamada à API do ClickUp nem notificação — o custo de processá-los é desprezível (uma checagem de conjunto).

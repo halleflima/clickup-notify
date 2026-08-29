@@ -145,6 +145,23 @@ def test_processa_criacao_mapeamento_inativo_usa_fallback(conexao):
     assert notificacoes[0]["destinatario_email"] == "fallback@empresa.com"
 
 
+def test_evento_nao_suportado_e_ignorado_sem_chamar_clickup(conexao):
+    item = {
+        "id": "hist-3",
+        "tipo_evento": "folderCreated",
+        "task_id": None,
+        "autor_id": 999,
+        "before": None,
+        "after": None,
+    }
+
+    with responses.RequestsMock():
+        processar_evento(conexao, item, CONFIG)
+
+    notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
+    assert notificacoes == []
+
+
 def test_processa_atribuicao_nao_chama_api_do_clickup(conexao):
     mapeamentos_repository.criar(conexao, 222, "ciclano@gmail.com", "ciclano@empresa.com", "Ciclano")
     item = {
