@@ -114,3 +114,22 @@ def test_falha_ao_processar_evento_nao_registra_dedup(client):
     conexao.close()
 
     assert total == 0
+
+
+def test_evento_de_tipo_nao_suportado_e_aceito_e_ignorado(client):
+    payload = {
+        "event": "folderCreated",
+        "task_id": None,
+        "history_items": [{"id": "hist-irrelevante", "user": {"id": 111}, "before": None, "after": None}],
+    }
+    corpo = json.dumps(payload).encode("utf-8")
+
+    with responses.RequestsMock():
+        resposta = client.post(
+            "/webhooks/clickup",
+            data=corpo,
+            content_type="application/json",
+            headers={"X-Signature": assinar(corpo)},
+        )
+
+    assert resposta.status_code == 200

@@ -48,7 +48,15 @@ def _resolver_contexto_via_tarefa(item: dict, config) -> tuple[list[dict], dict[
 
 
 def resolver_contexto_evento(item: dict, config) -> tuple[list[dict], dict[int, dict]]:
-    """Resolve quem deve ser notificado e o que se sabe (email/nome) de cada um."""
+    """Resolve quem deve ser notificado e o que se sabe (email/nome) de cada um.
+
+    O webhook do ClickUp pode estar inscrito em "*" (todos os eventos) -
+    qualquer tipo fora de EVENTOS_SUPORTADOS e ignorado aqui, sem chamar a
+    API do ClickUp nem tentar montar notificacao pra algo que nao mapeamos.
+    """
+    if item["tipo_evento"] not in regras.EVENTOS_SUPORTADOS:
+        return [], {}
+
     if item["tipo_evento"] == "taskAssigneeUpdated":
         return _resolver_contexto_atribuicao(item)
     return _resolver_contexto_via_tarefa(item, config)
