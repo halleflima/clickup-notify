@@ -8,6 +8,16 @@ CREATE TABLE IF NOT EXISTS eventos_processados (
     payload_bruto TEXT NOT NULL,
     recebido_em TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS mapeamentos_email (
+    clickup_user_id INTEGER PRIMARY KEY,
+    clickup_email TEXT NOT NULL,
+    official_email TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
