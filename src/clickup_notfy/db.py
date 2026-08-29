@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS notificacoes_enviadas (
     evento_id TEXT NOT NULL,
     destinatario_email TEXT NOT NULL,
     tipo_evento TEXT NOT NULL,
+    assunto TEXT NOT NULL,
+    corpo TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pendente',
     tentativas INTEGER NOT NULL DEFAULT 0,
     enviado_em TEXT,

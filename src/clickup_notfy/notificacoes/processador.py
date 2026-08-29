@@ -46,7 +46,7 @@ def processar_evento(conexao, item: dict, config) -> None:
         )
 
         notificacao_id = outbox_repository.criar_pendente(
-            conexao, item["id"], email_destino, item["tipo_evento"]
+            conexao, item["id"], email_destino, item["tipo_evento"], assunto, corpo
         )
         sucesso = email_sender.tentar_enviar(config, email_destino, assunto, corpo)
         outbox_repository.registrar_resultado_envio(conexao, notificacao_id, sucesso)

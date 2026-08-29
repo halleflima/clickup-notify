@@ -21,4 +21,8 @@ def create_app(config: type[Config] = Config) -> Flask:
 
 
 if __name__ == "__main__":
-    create_app().run()
+    from clickup_notfy.scheduler import iniciar_scheduler
+
+    app = create_app()
+    iniciar_scheduler(app.config)
+    app.run()

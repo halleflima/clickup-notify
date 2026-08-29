@@ -2,14 +2,19 @@ import sqlite3
 
 
 def criar_pendente(
-    conexao: sqlite3.Connection, evento_id: str, destinatario_email: str, tipo_evento: str
+    conexao: sqlite3.Connection,
+    evento_id: str,
+    destinatario_email: str,
+    tipo_evento: str,
+    assunto: str,
+    corpo: str,
 ) -> int:
     cursor = conexao.execute(
         """
-        INSERT INTO notificacoes_enviadas (evento_id, destinatario_email, tipo_evento)
-        VALUES (?, ?, ?)
+        INSERT INTO notificacoes_enviadas (evento_id, destinatario_email, tipo_evento, assunto, corpo)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (evento_id, destinatario_email, tipo_evento),
+        (evento_id, destinatario_email, tipo_evento, assunto, corpo),
     )
     conexao.commit()
     return cursor.lastrowid
