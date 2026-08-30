@@ -91,3 +91,33 @@ def test_extrair_solicitante_sem_email_retorna_none_no_campo():
     tarefa = {"custom_fields": [{"name": "Solicitante", "value": {"id": 333}}]}
 
     assert extrair_solicitante(tarefa) == {"id": 333, "email": None, "nome": None}
+
+
+def test_extrair_solicitante_com_emoji_no_nome_do_campo():
+    """Formato real confirmado em producao: o campo customizado no ClickUp
+    tem um emoji/prefixo no nome (ex: "\U0001f468\u200d\u2696\ufe0f Solicitante"),
+    entao uma comparacao exata de nome nunca bateria."""
+    tarefa = {
+        "custom_fields": [
+            {
+                "name": "\U0001f468\u200d\u2696\ufe0f Solicitante",
+                "value": [{"id": 82174980, "username": "Hallef Lima", "email": "hallef@gmail.com"}],
+            }
+        ]
+    }
+
+    assert extrair_solicitante(tarefa) == {
+        "id": 82174980,
+        "email": "hallef@gmail.com",
+        "nome": "Hallef Lima",
+    }
+
+
+def test_extrair_solicitante_e_case_insensitive():
+    tarefa = {
+        "custom_fields": [
+            {"name": "SOLICITANTE", "value": {"id": 111, "username": "x", "email": "x@gmail.com"}}
+        ]
+    }
+
+    assert extrair_solicitante(tarefa)["id"] == 111

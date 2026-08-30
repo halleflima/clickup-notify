@@ -27,8 +27,13 @@ def extrair_responsaveis_ids(tarefa: dict) -> list[int]:
 
 
 def _buscar_custom_field(tarefa: dict, nome_campo: str) -> dict | None:
+    """Casa pelo nome do campo de forma tolerante: no ClickUp real, campos
+    customizados costumam ter emoji/prefixo no nome (ex: "👨‍⚖️ Solicitante"),
+    entao uma comparacao exata nunca bate. Usa "contem", sem diferenciar
+    maiusculas/minusculas."""
+    nome_procurado = nome_campo.casefold()
     for campo in tarefa.get("custom_fields", []):
-        if campo.get("name") == nome_campo:
+        if nome_procurado in (campo.get("name") or "").casefold():
             return campo
     return None
 
