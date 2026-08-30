@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{ email_assunto }}</title>
+<!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+<style>
+  @media only screen and (max-width:620px){
+    .container{width:100% !important;}
+    .px{padding-left:24px !important;padding-right:24px !important;}
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#eef1f5;">
+
+<span style="display:none;font-size:1px;color:#eef1f5;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">{{ evento_resumo }} &mdash; {{ chamado_id }} &middot; {{ chamado_titulo }}</span>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#eef1f5;">
+<tr><td align="center" style="padding:32px 12px;">
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="container" style="width:600px;max-width:600px;background-color:#ffffff;border:1px solid #dbe1e8;border-radius:6px;">
+
+  <tr><td style="height:5px;line-height:5px;font-size:0;background-color:{{ cor_evento }};">&nbsp;</td></tr>
+
+  <tr>
+    <td class="px" style="padding:26px 40px 22px 40px;border-bottom:1px solid #e6eaef;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+          <td align="left" style="font-family:Arial,Helvetica,sans-serif;">
+            <div style="font-size:30px;line-height:32px;font-weight:bold;letter-spacing:1px;color:#5a5f66;">{{ empresa_sigla }}</div>
+            <div style="font-size:11px;line-height:16px;letter-spacing:2px;color:#3E7CB1;">{{ empresa_nome }}</div>
+          </td>
+          <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#8b929b;">
+            Clickup | Chamados
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <tr>
+    <td class="px" style="padding:34px 40px 0 40px;font-family:Arial,Helvetica,sans-serif;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td bgcolor="#e8f0f8" style="padding:6px 12px;border-radius:3px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:14px;letter-spacing:1px;font-weight:bold;color:#2c5f8a;text-transform:uppercase;">
+            {{ evento_tipo }}
+          </td>
+        </tr>
+      </table>
+      <div style="font-size:22px;line-height:30px;font-weight:bold;color:#26374a;padding-top:16px;mso-line-height-rule:exactly;">
+        {{ evento_titulo }}
+      </div>
+      <div style="font-size:15px;line-height:24px;color:#5a5f66;padding-top:10px;mso-line-height-rule:exactly;">
+        Ol&aacute;, {{ destinatario_nome }}. {{ evento_descricao }}
+      </div>
+    </td>
+  </tr>
+
+  <tr>
+    <td class="px" style="padding:26px 40px 0 40px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;background-color:#f7f9fb;border:1px solid #e2e8ef;border-radius:5px;">
+        <tr>
+          <td style="padding:20px 22px 8px 22px;font-family:Arial,Helvetica,sans-serif;">
+            <span style="font-family:'Courier New',Courier,monospace;font-size:16px;line-height:20px;font-weight:bold;color:#3E7CB1;letter-spacing:1px;">{{ chamado_id }}</span>
+            <div style="font-size:16px;line-height:24px;font-weight:bold;color:#26374a;padding-top:6px;">{{ chamado_titulo }}</div>
+          </td>
+        </tr>
+
+        {% if alteracao_de %}
+        <tr>
+          <td style="padding:6px 22px 0 22px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;">
+              <tr>
+                <td align="center" width="44%" bgcolor="#eef1f5" style="width:44%;padding:12px 6px;border-radius:4px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#7d848e;">
+                  <span style="font-size:10px;letter-spacing:1px;display:block;padding-bottom:3px;">{{ alteracao_label|upper }} ANTERIOR</span>
+                  <strong style="color:#5a6473;font-size:14px;">{{ alteracao_de }}</strong>
+                </td>
+                <td align="center" width="12%" style="width:12%;font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:bold;color:#3E7CB1;">&rarr;</td>
+                <td align="center" width="44%" bgcolor="#e8f0f8" style="width:44%;padding:12px 6px;border-radius:4px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#2c5f8a;">
+                  <span style="font-size:10px;letter-spacing:1px;display:block;padding-bottom:3px;">{{ alteracao_label|upper }} ATUAL</span>
+                  <strong style="font-size:14px;">{{ alteracao_para }}</strong>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        {% endif %}
+
+        <tr>
+          <td style="padding:14px 22px 20px 22px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">
+              <tr>
+                <td width="120" style="width:120px;padding:7px 0;color:#8b929b;border-top:1px solid #e6eaef;">Status</td>
+                <td style="padding:7px 0;color:#3d4550;border-top:1px solid #e6eaef;font-weight:bold;">{{ status_atual }}</td>
+              </tr>
+              <tr>
+                <td width="120" style="width:120px;padding:7px 0;color:#8b929b;border-top:1px solid #e6eaef;">Respons&aacute;vel</td>
+                <td style="padding:7px 0;color:#3d4550;border-top:1px solid #e6eaef;">{{ responsavel }}</td>
+              </tr>
+              <tr>
+                <td width="120" style="width:120px;padding:7px 0;color:#8b929b;border-top:1px solid #e6eaef;">Solicitante</td>
+                <td style="padding:7px 0;color:#3d4550;border-top:1px solid #e6eaef;">{{ solicitante }}</td>
+              </tr>
+              <tr>
+                <td width="120" style="width:120px;padding:7px 0;color:#8b929b;border-top:1px solid #e6eaef;">Prioridade</td>
+                <td style="padding:7px 0;color:#3d4550;border-top:1px solid #e6eaef;">{{ prioridade }}</td>
+              </tr>
+              <tr>
+                <td width="120" style="width:120px;padding:7px 0;color:#8b929b;border-top:1px solid #e6eaef;">Atualizado em</td>
+                <td style="padding:7px 0;color:#3d4550;border-top:1px solid #e6eaef;">{{ data_evento }}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  {% if texto_corpo %}
+  <tr>
+    <td class="px" style="padding:22px 40px 0 40px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;">
+        <tr>
+          <td width="3" bgcolor="{{ cor_evento }}" style="width:3px;font-size:0;line-height:0;">&nbsp;</td>
+          <td style="padding:2px 0 2px 16px;font-family:Arial,Helvetica,sans-serif;">
+            <div style="font-size:12px;line-height:18px;color:#8b929b;">{{ texto_label }}</div>
+            <div style="font-size:14px;line-height:22px;color:#3d4550;padding-top:5px;mso-line-height-rule:exactly;">{{ texto_corpo }}</div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  {% endif %}
+
+  <tr>
+    <td class="px" align="left" style="padding:28px 40px 36px 40px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td bgcolor="{{ cor_evento }}" style="border-radius:4px;">
+            <a href="{{ chamado_url }}" style="display:block;padding:13px 28px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:18px;font-weight:bold;color:#ffffff;text-decoration:none;">Abrir chamado {{ chamado_id }}</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <tr>
+    <td class="px" style="padding:22px 40px 28px 40px;background-color:#f7f9fb;border-top:1px solid #e6eaef;border-radius:0 0 5px 5px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:19px;color:#8b929b;">
+      Mensagem autom&aacute;tica da Central de Chamados {{ empresa_sigla }} &mdash; voc&ecirc; a recebeu porque acompanha o chamado {{ chamado_id }}.
+      <div style="padding-top:12px;color:#a7adb5;">{{ empresa_nome }}</div>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

@@ -118,24 +118,31 @@ def _resolver_email_destino(conexao, clickup_user_id: int, config) -> str:
     return config["FALLBACK_EMAIL"]
 
 
+def _resolver_nome_destinatario(conexao, clickup_user_id: int, pessoa_info: dict | None) -> str:
+    mapeamento = mapeamentos_repository.buscar_por_id(conexao, clickup_user_id)
+    if mapeamento and mapeamento["nome"]:
+        return mapeamento["nome"]
+    if pessoa_info and pessoa_info.get("nome"):
+        return pessoa_info["nome"]
+    return "colega"
+
+
 def processar_evento(conexao, item: dict, config) -> None:
     destinatarios, pessoas_conhecidas, metadados = resolver_contexto_evento(item, config)
 
     for clickup_user_id, pessoa_info in pessoas_conhecidas.items():
         _garantir_mapeamento(conexao, clickup_user_id, pessoa_info)
 
-    identificador_tarefa = metadados["identificador"]
-
     for destinatario in destinatarios:
-        email_destino = _resolver_email_destino(conexao, destinatario["clickup_user_id"], config)
+        clickup_user_id = destinatario["clickup_user_id"]
+        email_destino = _resolver_email_destino(conexao, clickup_user_id, config)
+        pessoa_info = pessoas_conhecidas.get(clickup_user_id)
+        nome_destinatario = _resolver_nome_destinatario(conexao, clickup_user_id, pessoa_info)
 
-        assunto = conteudo.montar_assunto(item["tipo_evento"], identificador_tarefa)
-        corpo = conteudo.montar_corpo(
-            item["tipo_evento"], identificador_tarefa, destinatario, item.get("before"), item.get("after")
-        )
+        assunto, corpo_html = conteudo.montar_email(item, destinatario, metadados, nome_destinatario)
 
         notificacao_id = outbox_repository.criar_pendente(
-            conexao, item["id"], email_destino, item["tipo_evento"], assunto, corpo
+            conexao, item["id"], email_destino, item["tipo_evento"], assunto, corpo_html
         )
-        sucesso = email_sender.tentar_enviar(config, email_destino, assunto, corpo)
+        sucesso = email_sender.tentar_enviar(config, email_destino, assunto, corpo_html)
         outbox_repository.registrar_resultado_envio(conexao, notificacao_id, sucesso)

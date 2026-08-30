@@ -11,6 +11,7 @@ def test_extrai_um_unico_item_de_historico():
                 "user": {"id": 111, "username": "fulano"},
                 "before": "em desenvolvimento",
                 "after": "testes",
+                "date": "1621915186877",
             }
         ],
     }
@@ -25,6 +26,7 @@ def test_extrai_um_unico_item_de_historico():
             "autor_id": 111,
             "before": "em desenvolvimento",
             "after": "testes",
+            "data_epoch_ms": "1621915186877",
         }
     ]
 
