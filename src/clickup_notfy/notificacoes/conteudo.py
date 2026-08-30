@@ -30,6 +30,7 @@ OBSERVACOES_POR_STATUS = {
 
 EMPRESA_SIGLA = "CMM"
 EMPRESA_NOME = "CMM Sistemas de Informação"
+EMPRESA_LOGO_URL = "https://cmmsistemas.com.br/wp-content/uploads/2022/06/logo-cmm.png"
 NAO_ATRIBUIDO = "Não atribuído"
 
 
@@ -144,6 +145,7 @@ def montar_variaveis_email(item: dict, destinatario: dict, metadados: dict, nome
         "cor_evento": _cor_por_status(status_exibicao),
         "empresa_sigla": EMPRESA_SIGLA,
         "empresa_nome": EMPRESA_NOME,
+        "empresa_logo_url": EMPRESA_LOGO_URL,
         "destinatario_nome": nome_destinatario,
         "chamado_id": identificador,
         "chamado_titulo": metadados["titulo"] or "(sem título)",

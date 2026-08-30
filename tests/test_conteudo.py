@@ -156,3 +156,10 @@ def test_montar_email_inclui_bloco_de_alteracao_na_mudanca_de_status():
 
     assert "ANTERIOR" in corpo_html
     assert "Aberto" in corpo_html
+
+
+def test_montar_email_inclui_logo_real_da_empresa():
+    _, corpo_html = montar_email(item_base("taskCreated"), {}, METADADOS_BASE, "Marcos")
+
+    assert "https://cmmsistemas.com.br/wp-content/uploads/2022/06/logo-cmm.png" in corpo_html
+    assert "<img" in corpo_html
