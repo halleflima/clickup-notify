@@ -15,3 +15,4 @@ O Movidesk (sistema de atendimento ao cliente) está fora de escopo nesta fase �
 | [0007](0007-processo-de-desenvolvimento.md) | Processo de desenvolvimento: testes e tamanho de PR |
 | [0008](0008-rota-de-documentacao-da-api.md) | Rota de documentação da API |
 | [0009](0009-template-html-de-email.md) | Template HTML de email |
+| [0010](0010-deploy-em-producao.md) | Deploy em produção |
