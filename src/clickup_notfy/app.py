@@ -2,6 +2,7 @@ from flask import Flask
 
 from clickup_notfy import db
 from clickup_notfy.config import Config
+from clickup_notfy.documentacao.routes import documentacao_bp
 from clickup_notfy.mapeamentos.routes import mapeamentos_bp
 from clickup_notfy.webhook.routes import webhook_bp
 
@@ -16,6 +17,7 @@ def create_app(config: type[Config] = Config) -> Flask:
 
     app.register_blueprint(webhook_bp)
     app.register_blueprint(mapeamentos_bp)
+    app.register_blueprint(documentacao_bp)
 
     return app
 
