@@ -369,3 +369,24 @@ def test_metadados_da_tarefa_tambem_disponivel_na_atribuicao(conexao):
     _, _, metadados = resolver_contexto_evento(item, CONFIG)
 
     assert metadados["identificador"] == "abc123"
+
+
+@responses.activate
+def test_dois_eventos_diferentes_do_clickup_para_mesma_criacao_nao_duplicam_email(conexao):
+    """Reproduz bug real: o ClickUp as vezes manda 2 history_items com IDs
+    diferentes ("taskCreated") pra uma unica criacao de chamado. Dedup por
+    evento_id nao pega isso (IDs realmente diferentes) - precisa comparar
+    o conteudo da notificacao."""
+    responses.add(
+        responses.GET,
+        "https://api.clickup.com/api/v2/task/abc123",
+        json={"assignees": [], "custom_fields": [{"name": "Solicitante", "value": {"id": 111}}]},
+        status=200,
+    )
+    mapeamentos_repository.criar(conexao, 111, "fulano@gmail.com", "fulano@empresa.com", "Fulano")
+
+    processar_evento(conexao, item_criacao(evento_id="hist-1"), CONFIG)
+    processar_evento(conexao, item_criacao(evento_id="hist-2"), CONFIG)
+
+    notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
+    assert len(notificacoes) == 1

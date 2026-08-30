@@ -17,6 +17,7 @@ Também foi levantada a necessidade futura de rastrear se um email foi aberto (p
 |---|---|
 | `id` | chave primária |
 | `evento_id` | ID do item de mudança do ClickUp (`history_items[].id` — um único POST de webhook pode trazer vários itens), usado para deduplicação (ver [ADR-0006](0006-seguranca-do-webhook-e-idempotencia.md)) |
+| `task_id` | ID bruto do chamado no ClickUp — usado na proteção contra duplicata por conteúdo (ver abaixo) |
 | `destinatario_email` | email oficial de destino |
 | `tipo_evento` | criação / comentário / mudança de status |
 | `status` | `pendente` \| `enviado` \| `falha` |
@@ -38,6 +39,13 @@ Rotina diária (parte do mesmo scheduler) apaga registros de `notificacoes_envia
 
 Rejeitada a alternativa de um job mensal que calcula "qual mês checar" — o purge diário simples com filtro de data é equivalente e mais simples de implementar/entender.
 
+### Proteção contra duplicata por conteúdo (achado em produção)
+Confirmado testando de verdade: o ClickUp às vezes emite **dois `history_items` com IDs diferentes** para uma única ação real do usuário (ex: 2 eventos `taskCreated`, poucos segundos um do outro, para a criação de um único chamado). Como os IDs são genuinamente diferentes, a deduplicação por `evento_id` (ADR-0006) não pega esse caso — cada um é processado normalmente e geraria um email duplicado.
+
+Antes de criar um novo registro em `notificacoes_enviadas`, o serviço verifica se já existe um envio **bem-sucedido** com o mesmo `task_id` + `tipo_evento` + `destinatario_email` + `corpo` (conteúdo idêntico, não só o tipo) nos últimos 5 minutos (`outbox_repository.ja_enviada_recentemente`). Se sim, a notificação é descartada silenciosamente (só um log informativo).
+
+Comparar o **conteúdo renderizado**, não só o tipo de evento, é deliberado: duas mudanças de status genuinamente diferentes (ex: A→B, depois B→C minutos depois) têm corpos diferentes e não são suprimidas — só bloqueia repetição de fato idêntica. Só considera envios com `status = 'enviado'` — uma tentativa que falhou não bloqueia a próxima.
+
 ### Fallback para usuário sem mapeamento
 Se um evento referenciar um `clickup_user_id` sem mapeamento ativo em `mapeamentos_email`, o serviço loga o erro e envia a notificação para um email de fallback único, fixo via variável de ambiente.
 
@@ -49,3 +57,4 @@ Se um evento referenciar um `clickup_user_id` sem mapeamento ativo em `mapeament
 - Nenhuma notificação é perdida silenciosamente: toda falha vira um registro `pendente` que será reprocessado.
 - A tabela cresce de forma limitada (purge de 2 anos), mantendo o banco leve indefinidamente.
 - Evoluir para tracking de abertura ou fallback múltiplo no futuro não exige migração de schema — só ativar a lógica que já tem onde guardar o dado.
+- A proteção por conteúdo cobre o caso confirmado (ClickUp duplicando `history_items` para uma mesma ação), mas depende de o conteúdo ser realmente idêntico — se algo no corpo variar entre as duas emissões (ex: timestamp diferente no rodapé), a duplicata não seria pega. Não é o caso hoje (o "Atualizado em" vem do `history_items[].date`, que é o mesmo nos dois eventos duplicados observados).

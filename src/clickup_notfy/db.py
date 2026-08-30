@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS mapeamentos_email (
 CREATE TABLE IF NOT EXISTS notificacoes_enviadas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     evento_id TEXT NOT NULL,
+    task_id TEXT,
     destinatario_email TEXT NOT NULL,
     tipo_evento TEXT NOT NULL,
     assunto TEXT NOT NULL,
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS notificacoes_enviadas (
 
 CREATE INDEX IF NOT EXISTS idx_notificacoes_status ON notificacoes_enviadas (status);
 CREATE INDEX IF NOT EXISTS idx_notificacoes_created_at ON notificacoes_enviadas (created_at);
+CREATE INDEX IF NOT EXISTS idx_notificacoes_dedup ON notificacoes_enviadas (task_id, tipo_evento, destinatario_email);
 """
 
 
