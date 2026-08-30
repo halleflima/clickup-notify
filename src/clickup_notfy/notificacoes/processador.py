@@ -29,7 +29,7 @@ def _mapa_pessoas(pessoas: list[dict]) -> dict[int, dict]:
     return {pessoa["id"]: pessoa for pessoa in pessoas}
 
 
-def _resolver_contexto_atribuicao(item: dict) -> tuple[list[dict], dict[int, dict]]:
+def _resolver_contexto_atribuicao(item: dict) -> tuple[list[dict], dict[int, dict], str]:
     pessoas_antes = _extrair_pessoas(item["before"])
     pessoas_depois = _extrair_pessoas(item["after"])
 
@@ -38,11 +38,14 @@ def _resolver_contexto_atribuicao(item: dict) -> tuple[list[dict], dict[int, dic
         responsaveis_ids_antes=[pessoa["id"] for pessoa in pessoas_antes],
         responsaveis_ids_depois=[pessoa["id"] for pessoa in pessoas_depois],
     )
-    return destinatarios, _mapa_pessoas(pessoas_antes + pessoas_depois)
+    # Este evento nao busca a tarefa na API (ver ADR-0002), entao nao temos
+    # como saber o custom_id aqui - usa o id bruto do ClickUp mesmo.
+    return destinatarios, _mapa_pessoas(pessoas_antes + pessoas_depois), item["task_id"]
 
 
-def _resolver_contexto_via_tarefa(item: dict, config) -> tuple[list[dict], dict[int, dict]]:
+def _resolver_contexto_via_tarefa(item: dict, config) -> tuple[list[dict], dict[int, dict], str]:
     tarefa = clickup_api.buscar_tarefa(item["task_id"], config["CLICKUP_API_TOKEN"])
+    identificador_tarefa = tarefa.get("custom_id") or item["task_id"]
     responsaveis = clickup_api.extrair_responsaveis(tarefa)
     solicitante = clickup_api.extrair_solicitante(tarefa)
     responsaveis_ids = [responsavel["id"] for responsavel in responsaveis]
@@ -51,23 +54,25 @@ def _resolver_contexto_via_tarefa(item: dict, config) -> tuple[list[dict], dict[
 
     if item["tipo_evento"] == "taskCreated":
         destinatarios = regras.resolver_destinatarios_criacao(solicitante_id, responsaveis_ids)
-        return destinatarios, pessoas_conhecidas
+        return destinatarios, pessoas_conhecidas, identificador_tarefa
 
     destinatarios = regras.resolver_destinatarios_envolvidos(
         item["autor_id"], solicitante_id, responsaveis_ids
     )
-    return destinatarios, pessoas_conhecidas
+    return destinatarios, pessoas_conhecidas, identificador_tarefa
 
 
-def resolver_contexto_evento(item: dict, config) -> tuple[list[dict], dict[int, dict]]:
-    """Resolve quem deve ser notificado e o que se sabe (email/nome) de cada um.
+def resolver_contexto_evento(item: dict, config) -> tuple[list[dict], dict[int, dict], str]:
+    """Resolve quem deve ser notificado, o que se sabe (email/nome) de cada
+    um, e o identificador de exibicao do chamado (custom_id tipo "DV-8165"
+    quando disponivel, senao o id bruto do ClickUp).
 
     O webhook do ClickUp pode estar inscrito em "*" (todos os eventos) -
     qualquer tipo fora de EVENTOS_SUPORTADOS e ignorado aqui, sem chamar a
     API do ClickUp nem tentar montar notificacao pra algo que nao mapeamos.
     """
     if item["tipo_evento"] not in regras.EVENTOS_SUPORTADOS:
-        return [], {}
+        return [], {}, item["task_id"]
 
     if item["tipo_evento"] == "taskAssigneeUpdated":
         return _resolver_contexto_atribuicao(item)
@@ -97,7 +102,7 @@ def _resolver_email_destino(conexao, clickup_user_id: int, config) -> str:
 
 
 def processar_evento(conexao, item: dict, config) -> None:
-    destinatarios, pessoas_conhecidas = resolver_contexto_evento(item, config)
+    destinatarios, pessoas_conhecidas, identificador_tarefa = resolver_contexto_evento(item, config)
 
     for clickup_user_id, pessoa_info in pessoas_conhecidas.items():
         _garantir_mapeamento(conexao, clickup_user_id, pessoa_info)
@@ -105,9 +110,9 @@ def processar_evento(conexao, item: dict, config) -> None:
     for destinatario in destinatarios:
         email_destino = _resolver_email_destino(conexao, destinatario["clickup_user_id"], config)
 
-        assunto = conteudo.montar_assunto(item["tipo_evento"], item["task_id"])
+        assunto = conteudo.montar_assunto(item["tipo_evento"], identificador_tarefa)
         corpo = conteudo.montar_corpo(
-            item["tipo_evento"], item["task_id"], destinatario, item.get("before"), item.get("after")
+            item["tipo_evento"], identificador_tarefa, destinatario, item.get("before"), item.get("after")
         )
 
         notificacao_id = outbox_repository.criar_pendente(

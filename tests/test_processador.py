@@ -262,3 +262,44 @@ def test_autor_suprimido_ainda_e_auto_cadastrado(conexao):
     mapeamento = mapeamentos_repository.buscar_por_id(conexao, 111)
     assert mapeamento is not None
     assert mapeamento["nome"] == "Fulano"
+
+
+@responses.activate
+def test_usa_custom_id_no_conteudo_quando_disponivel(conexao):
+    mapeamentos_repository.criar(conexao, 111, "fulano@gmail.com", "fulano@empresa.com", "Fulano")
+    responses.add(
+        responses.GET,
+        "https://api.clickup.com/api/v2/task/abc123",
+        json={
+            "custom_id": "DV-8165",
+            "assignees": [],
+            "custom_fields": [{"name": "Solicitante", "value": {"id": 111}}],
+        },
+        status=200,
+    )
+
+    processar_evento(conexao, item_criacao(), CONFIG)
+
+    notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
+    assert "DV-8165" in notificacoes[0]["assunto"]
+    assert "abc123" not in notificacoes[0]["assunto"]
+
+
+@responses.activate
+def test_sem_custom_id_usa_id_bruto_no_conteudo(conexao):
+    mapeamentos_repository.criar(conexao, 111, "fulano@gmail.com", "fulano@empresa.com", "Fulano")
+    responses.add(
+        responses.GET,
+        "https://api.clickup.com/api/v2/task/abc123",
+        json={
+            "custom_id": None,
+            "assignees": [],
+            "custom_fields": [{"name": "Solicitante", "value": {"id": 111}}],
+        },
+        status=200,
+    )
+
+    processar_evento(conexao, item_criacao(), CONFIG)
+
+    notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
+    assert "abc123" in notificacoes[0]["assunto"]
