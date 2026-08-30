@@ -24,21 +24,21 @@ def item_base(tipo_evento, **overrides):
     return base
 
 
-def test_criacao_com_responsavel_usa_texto_generico():
+def test_criacao_usa_texto_generico():
     variaveis = montar_variaveis_email(item_base("taskCreated"), {}, METADADOS_BASE, "Marcos")
 
     assert variaveis["evento_tipo"] == "Novo chamado"
     assert "aberto" in variaveis["evento_titulo"].lower()
-    assert "não tem responsável" not in variaveis["evento_descricao"]
+    assert variaveis["evento_descricao"] == "O chamado abaixo foi criado com sucesso."
     assert variaveis["alteracao_de"] is None
 
 
-def test_criacao_sem_responsavel_avisa_que_falta_responsavel():
+def test_criacao_sem_responsavel_usa_o_mesmo_texto_generico():
     metadados = dict(METADADOS_BASE, responsavel_nome="Não atribuído")
 
     variaveis = montar_variaveis_email(item_base("taskCreated"), {}, metadados, "Marcos")
 
-    assert "não tem responsável" in variaveis["evento_descricao"]
+    assert variaveis["evento_descricao"] == "O chamado abaixo foi criado com sucesso."
 
 
 def test_criacao_com_descricao_preenche_bloco_de_texto():
