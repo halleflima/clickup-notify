@@ -13,3 +13,4 @@ O Movidesk (sistema de atendimento ao cliente) está fora de escopo nesta fase �
 | [0005](0005-autenticacao-da-api-de-gerenciamento.md) | Autenticação da API de gerenciamento |
 | [0006](0006-seguranca-do-webhook-e-idempotencia.md) | Segurança do webhook e idempotência de eventos |
 | [0007](0007-processo-de-desenvolvimento.md) | Processo de desenvolvimento: testes e tamanho de PR |
+| [0008](0008-rota-de-documentacao-da-api.md) | Rota de documentação da API |
