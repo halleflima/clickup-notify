@@ -64,6 +64,29 @@ def test_criar_mapeamento_sem_campo_obrigatorio_retorna_400(client):
     assert resposta.status_code == 400
 
 
+def test_criar_mapeamento_com_corpo_lista_retorna_400_em_vez_de_500(client):
+    corpo_lista = [payload_mapeamento()]
+
+    resposta = client.post("/mapeamentos-email", json=corpo_lista, headers=autorizacao())
+
+    assert resposta.status_code == 400
+    assert "lista" in resposta.get_json()["erro"]
+
+
+def test_criar_mapeamento_com_json_malformado_retorna_400_com_mensagem_distinta(client):
+    corpo_com_virgula_sobrando = b'{"nome": "Fulano",}'
+
+    resposta = client.post(
+        "/mapeamentos-email",
+        data=corpo_com_virgula_sobrando,
+        content_type="application/json",
+        headers=autorizacao(),
+    )
+
+    assert resposta.status_code == 400
+    assert "sintaxe" in resposta.get_json()["erro"]
+
+
 def test_obter_mapeamento_inexistente_retorna_404(client):
     resposta = client.get("/mapeamentos-email/999", headers=autorizacao())
     assert resposta.status_code == 404
@@ -78,3 +101,13 @@ def test_atualizar_mapeamento_para_desativar(client):
 
     assert resposta.status_code == 200
     assert resposta.get_json()["ativo"] is False
+
+
+def test_atualizar_mapeamento_com_corpo_lista_retorna_400_em_vez_de_500(client):
+    client.post("/mapeamentos-email", json=payload_mapeamento(), headers=autorizacao())
+
+    resposta = client.patch(
+        "/mapeamentos-email/111", json=[{"ativo": False}], headers=autorizacao()
+    )
+
+    assert resposta.status_code == 400
