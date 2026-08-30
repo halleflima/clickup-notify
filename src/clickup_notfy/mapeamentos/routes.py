@@ -13,10 +13,21 @@ def _conexao():
     return db.conectar(current_app.config["DATABASE_PATH"])
 
 
+def _corpo_json_como_dict() -> dict | None:
+    """Retorna o corpo JSON da requisicao como dict, ou None se ausente,
+    invalido, ou de outro tipo (ex: uma lista) - protege as rotas de POST
+    e PATCH de tentarem tratar um array/string/numero como se fosse objeto."""
+    dados = request.get_json(silent=True)
+    return dados if isinstance(dados, dict) else None
+
+
 @mapeamentos_bp.route("", methods=["POST"])
 @exigir_bearer_token
 def criar_mapeamento():
-    dados = request.get_json(silent=True) or {}
+    dados = _corpo_json_como_dict()
+    if dados is None:
+        return jsonify({"erro": "corpo da requisicao precisa ser um objeto JSON"}), 400
+
     faltando = CAMPOS_OBRIGATORIOS - dados.keys()
     if faltando:
         return jsonify({"erro": f"campos obrigatorios faltando: {sorted(faltando)}"}), 400
@@ -68,7 +79,9 @@ def obter_mapeamento(clickup_user_id):
 @mapeamentos_bp.route("/<int:clickup_user_id>", methods=["PATCH"])
 @exigir_bearer_token
 def atualizar_mapeamento(clickup_user_id):
-    dados = request.get_json(silent=True) or {}
+    dados = _corpo_json_como_dict()
+    if dados is None:
+        return jsonify({"erro": "corpo da requisicao precisa ser um objeto JSON"}), 400
 
     conexao = _conexao()
     try:
