@@ -22,6 +22,7 @@ def extrair_itens_historico(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "autor_id": usuario.get("id"),
                 "before": item.get("before"),
                 "after": item.get("after"),
+                "data_epoch_ms": item.get("date"),
             }
         )
 

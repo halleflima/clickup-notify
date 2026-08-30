@@ -1,50 +1,158 @@
-from clickup_notfy.notificacoes.conteudo import montar_assunto, montar_corpo
+from clickup_notfy.notificacoes.conteudo import montar_email, montar_variaveis_email
+
+METADADOS_BASE = {
+    "identificador": "DV-8165",
+    "titulo": "Erro ao gerar boleto",
+    "prioridade": "Alta",
+    "descricao": None,
+    "status_atual": "em desenvolvimento",
+    "responsavel_nome": "Fulano",
+    "solicitante_nome": "Ciclano",
+}
 
 
-def test_assunto_por_tipo_de_evento():
-    assert "abc123" in montar_assunto("taskCreated", "abc123")
-    assert "abc123" in montar_assunto("evento_desconhecido", "abc123")
+def item_base(tipo_evento, **overrides):
+    base = {
+        "tipo_evento": tipo_evento,
+        "task_id": "abc123",
+        "autor_id": 999,
+        "before": None,
+        "after": None,
+        "data_epoch_ms": None,
+    }
+    base.update(overrides)
+    return base
 
 
-def test_corpo_criacao():
-    assert "criado" in montar_corpo("taskCreated", "abc123", {})
+def test_criacao_com_responsavel_usa_texto_generico():
+    variaveis = montar_variaveis_email(item_base("taskCreated"), {}, METADADOS_BASE, "Marcos")
+
+    assert variaveis["evento_tipo"] == "Novo chamado"
+    assert "aberto" in variaveis["evento_titulo"].lower()
+    assert "não tem responsável" not in variaveis["evento_descricao"]
+    assert variaveis["alteracao_de"] is None
 
 
-def test_corpo_comentario_nao_revela_conteudo_do_comentario():
-    corpo = montar_corpo("taskCommentPosted", "abc123", {})
+def test_criacao_sem_responsavel_avisa_que_falta_responsavel():
+    metadados = dict(METADADOS_BASE, responsavel_nome="Não atribuído")
 
-    assert "abc123" in corpo
-    assert "ClickUp" in corpo
+    variaveis = montar_variaveis_email(item_base("taskCreated"), {}, metadados, "Marcos")
 
-
-def test_corpo_mudanca_de_status_mostra_antes_e_depois():
-    corpo = montar_corpo("taskStatusUpdated", "abc123", {}, before="em desenvolvimento", after="testes")
-
-    assert "em desenvolvimento" in corpo
-    assert "testes" in corpo
+    assert "não tem responsável" in variaveis["evento_descricao"]
 
 
-def test_corpo_status_com_observacao_cadastrada():
-    corpo = montar_corpo(
-        "taskStatusUpdated", "abc123", {}, before="em desenvolvimento", after="reanálise"
-    )
+def test_criacao_com_descricao_preenche_bloco_de_texto():
+    metadados = dict(METADADOS_BASE, descricao="Erro 500 ao gerar boleto no fim de semana.")
 
-    assert "precisa ser analisado" in corpo
+    variaveis = montar_variaveis_email(item_base("taskCreated"), {}, metadados, "Marcos")
 
-
-def test_corpo_status_sem_observacao_nao_adiciona_texto_extra():
-    corpo = montar_corpo("taskStatusUpdated", "abc123", {}, before="a fazer", after="bloqueado")
-
-    assert "precisa ser analisado" not in corpo
+    assert variaveis["texto_label"] == "Descrição do solicitante"
+    assert variaveis["texto_corpo"] == "Erro 500 ao gerar boleto no fim de semana."
 
 
-def test_corpo_atribuicao_adicionado():
-    corpo = montar_corpo("taskAssigneeUpdated", "abc123", {"papel": "atribuido"})
+def test_criacao_sem_descricao_nao_preenche_bloco_de_texto():
+    variaveis = montar_variaveis_email(item_base("taskCreated"), {}, METADADOS_BASE, "Marcos")
 
-    assert "atribuído" in corpo
+    assert variaveis["texto_label"] is None
+    assert variaveis["texto_corpo"] is None
 
 
-def test_corpo_atribuicao_removido():
-    corpo = montar_corpo("taskAssigneeUpdated", "abc123", {"papel": "removido"})
+def test_comentario_nao_revela_conteudo_do_comentario():
+    variaveis = montar_variaveis_email(item_base("taskCommentPosted"), {}, METADADOS_BASE, "Marcos")
 
-    assert "desvinculado" in corpo
+    assert variaveis["texto_corpo"] is None
+    assert "DV-8165" in variaveis["evento_titulo"]
+
+
+def test_status_mostra_de_e_para():
+    item = item_base("taskStatusUpdated", before="Aberto", after="Em andamento")
+
+    variaveis = montar_variaveis_email(item, {}, METADADOS_BASE, "Marcos")
+
+    assert variaveis["alteracao_label"] == "Status"
+    assert variaveis["alteracao_de"] == "Aberto"
+    assert variaveis["alteracao_para"] == "Em andamento"
+    assert "Aberto" in variaveis["evento_descricao"]
+    assert "Em andamento" in variaveis["evento_descricao"]
+
+
+def test_status_reanalise_preenche_observacao_generica():
+    item = item_base("taskStatusUpdated", before="Em andamento", after="Reanálise")
+
+    variaveis = montar_variaveis_email(item, {}, METADADOS_BASE, "Marcos")
+
+    assert variaveis["texto_label"] == "Observação"
+    assert "reanálise" in variaveis["texto_corpo"].lower()
+
+
+def test_status_sem_observacao_configurada_fica_vazio():
+    item = item_base("taskStatusUpdated", before="A fazer", after="Bloqueado")
+
+    variaveis = montar_variaveis_email(item, {}, METADADOS_BASE, "Marcos")
+
+    assert variaveis["texto_corpo"] is None
+
+
+def test_status_encerrado_usa_cor_verde():
+    item = item_base("taskStatusUpdated", before="Em andamento", after="Encerrado")
+    metadados = dict(METADADOS_BASE, status_atual="Encerrado")
+
+    variaveis = montar_variaveis_email(item, {}, metadados, "Marcos")
+
+    assert variaveis["cor_evento"] == "#2f8f5b"
+
+
+def test_status_normal_usa_cor_padrao():
+    variaveis = montar_variaveis_email(item_base("taskStatusUpdated"), {}, METADADOS_BASE, "Marcos")
+
+    assert variaveis["cor_evento"] == "#3E7CB1"
+
+
+def test_atribuicao_adicionado_mostra_nome_do_destinatario_como_atual():
+    item = item_base("taskAssigneeUpdated")
+    destinatario = {"clickup_user_id": 111, "papel": "atribuido"}
+
+    variaveis = montar_variaveis_email(item, destinatario, METADADOS_BASE, "Marcos")
+
+    assert variaveis["alteracao_de"] == "Não atribuído"
+    assert variaveis["alteracao_para"] == "Marcos"
+
+
+def test_atribuicao_removido_mostra_nome_do_destinatario_como_anterior():
+    item = item_base("taskAssigneeUpdated")
+    destinatario = {"clickup_user_id": 111, "papel": "removido"}
+
+    variaveis = montar_variaveis_email(item, destinatario, METADADOS_BASE, "Marcos")
+
+    assert variaveis["alteracao_de"] == "Marcos"
+    assert variaveis["alteracao_para"] == "Não atribuído"
+
+
+def test_chamado_url_aponta_para_o_clickup():
+    variaveis = montar_variaveis_email(item_base("taskCreated"), {}, METADADOS_BASE, "Marcos")
+
+    assert variaveis["chamado_url"] == "https://app.clickup.com/t/abc123"
+
+
+def test_montar_email_retorna_assunto_e_html_renderizado():
+    assunto, corpo_html = montar_email(item_base("taskCreated"), {}, METADADOS_BASE, "Marcos")
+
+    assert assunto.startswith("[DV-8165]")
+    assert "<!DOCTYPE html>" in corpo_html
+    assert "DV-8165" in corpo_html
+    assert "Marcos" in corpo_html
+
+
+def test_montar_email_omite_bloco_de_alteracao_quando_nao_ha():
+    _, corpo_html = montar_email(item_base("taskCreated"), {}, METADADOS_BASE, "Marcos")
+
+    assert "ANTERIOR" not in corpo_html
+
+
+def test_montar_email_inclui_bloco_de_alteracao_na_mudanca_de_status():
+    item = item_base("taskStatusUpdated", before="Aberto", after="Em andamento")
+
+    _, corpo_html = montar_email(item, {}, METADADOS_BASE, "Marcos")
+
+    assert "ANTERIOR" in corpo_html
+    assert "Aberto" in corpo_html

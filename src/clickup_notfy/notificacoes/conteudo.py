@@ -1,52 +1,166 @@
-"""Construcao do assunto/corpo do email, conforme ADR-0002.
+"""Montagem do email de notificacao a partir do template HTML (ADR-0009).
 
-Conteudo propositalmente minimalista - o objetivo e levar o destinatario
-ate o ClickUp, nao substituir a ferramenta.
+Conteudo minimalista de proposito pra comentario (ADR-0002) - sem o texto
+do comentario em si, so um aviso + link pro ClickUp.
 """
 
+import datetime
+from pathlib import Path
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+_DIR_TEMPLATES = Path(__file__).parent / "templates"
+_AMBIENTE = Environment(
+    loader=FileSystemLoader(str(_DIR_TEMPLATES)),
+    autoescape=select_autoescape(["html", "jinja2"]),
+)
+_TEMPLATE = _AMBIENTE.get_template("email.html.jinja2")
+
+COR_PADRAO = "#3E7CB1"
+_CORES_POR_STATUS = {
+    "encerrado": "#2f8f5b",
+}
+
 OBSERVACOES_POR_STATUS = {
-    "reanálise": "Este chamado precisa ser analisado, por favor acesse o ClickUp.",
+    "reanálise": (
+        "Este chamado está em reanálise, geralmente por falta de dados. "
+        "Por favor, acesse o ClickUp para revisar as informações."
+    ),
 }
 
-_TITULOS_POR_EVENTO = {
-    "taskCreated": "Novo chamado criado: {task_id}",
-    "taskCommentPosted": "Novo comentário no chamado {task_id}",
-    "taskStatusUpdated": "Chamado {task_id} mudou de status",
-    "taskAssigneeUpdated": "Atualização de responsável no chamado {task_id}",
-}
+EMPRESA_SIGLA = "CMM"
+EMPRESA_NOME = "CMM Sistemas de Informação"
+NAO_ATRIBUIDO = "Não atribuído"
 
 
-def montar_assunto(tipo_evento: str, task_id: str) -> str:
-    modelo = _TITULOS_POR_EVENTO.get(tipo_evento, "Atualização no chamado {task_id}")
-    return modelo.format(task_id=task_id)
+def _formatar_data(data_epoch_ms) -> str:
+    try:
+        momento = datetime.datetime.fromtimestamp(int(data_epoch_ms) / 1000)
+    except (TypeError, ValueError):
+        momento = datetime.datetime.now()
+    return momento.strftime("%d/%m/%Y às %H:%M")
 
 
-def montar_corpo(
-    tipo_evento: str,
-    task_id: str,
-    destinatario: dict,
-    before: str | None = None,
-    after: str | None = None,
-) -> str:
+def _cor_por_status(status: str | None) -> str:
+    if not status:
+        return COR_PADRAO
+    return _CORES_POR_STATUS.get(status.strip().casefold(), COR_PADRAO)
+
+
+def _contexto_criacao(metadados: dict) -> dict:
+    tem_responsavel = metadados["responsavel_nome"] != NAO_ATRIBUIDO
+    return {
+        "evento_tipo": "Novo chamado",
+        "evento_titulo": "Um novo chamado foi aberto",
+        "evento_descricao": (
+            "O chamado abaixo foi aberto."
+            if tem_responsavel
+            else "O chamado abaixo entrou na fila da sua equipe e ainda não tem responsável."
+        ),
+        "alteracao_label": None,
+        "alteracao_de": None,
+        "alteracao_para": None,
+        "texto_label": "Descrição do solicitante" if metadados["descricao"] else None,
+        "texto_corpo": metadados["descricao"],
+    }
+
+
+def _contexto_comentario(identificador: str) -> dict:
+    return {
+        "evento_tipo": "Novo comentário",
+        "evento_titulo": f"Novo comentário no chamado {identificador}",
+        "evento_descricao": (
+            "Um novo comentário foi adicionado ao chamado que você acompanha. "
+            "Acesse o ClickUp para ver o conteúdo."
+        ),
+        "alteracao_label": None,
+        "alteracao_de": None,
+        "alteracao_para": None,
+        "texto_label": None,
+        "texto_corpo": None,
+    }
+
+
+def _contexto_status(identificador: str, status_antigo: str | None, status_novo: str | None) -> dict:
+    observacao = OBSERVACOES_POR_STATUS.get((status_novo or "").strip().casefold())
+    return {
+        "evento_tipo": "Mudança de status",
+        "evento_titulo": f"O status do chamado {identificador} foi alterado",
+        "evento_descricao": f"O chamado saiu de {status_antigo} e agora está {status_novo}.",
+        "alteracao_label": "Status",
+        "alteracao_de": status_antigo,
+        "alteracao_para": status_novo,
+        "texto_label": "Observação" if observacao else None,
+        "texto_corpo": observacao,
+    }
+
+
+def _contexto_atribuicao(papel: str, nome_destinatario: str) -> dict:
+    if papel == "atribuido":
+        return {
+            "evento_tipo": "Mudança de responsável",
+            "evento_titulo": "Uma tarefa foi vinculada à sua responsabilidade",
+            "evento_descricao": (
+                "Você é o novo responsável por este chamado. Confira os detalhes "
+                "abaixo e dê o primeiro retorno ao solicitante."
+            ),
+            "alteracao_label": "Responsável",
+            "alteracao_de": NAO_ATRIBUIDO,
+            "alteracao_para": nome_destinatario,
+            "texto_label": None,
+            "texto_corpo": None,
+        }
+
+    return {
+        "evento_tipo": "Mudança de responsável",
+        "evento_titulo": "Você foi desvinculado de um chamado",
+        "evento_descricao": "Você não é mais responsável por este chamado.",
+        "alteracao_label": "Responsável",
+        "alteracao_de": nome_destinatario,
+        "alteracao_para": NAO_ATRIBUIDO,
+        "texto_label": None,
+        "texto_corpo": None,
+    }
+
+
+def montar_variaveis_email(item: dict, destinatario: dict, metadados: dict, nome_destinatario: str) -> dict:
+    tipo_evento = item["tipo_evento"]
+    identificador = metadados["identificador"]
+
     if tipo_evento == "taskCreated":
-        return f"O chamado {task_id} foi criado."
+        contexto_evento = _contexto_criacao(metadados)
+    elif tipo_evento == "taskCommentPosted":
+        contexto_evento = _contexto_comentario(identificador)
+    elif tipo_evento == "taskStatusUpdated":
+        contexto_evento = _contexto_status(identificador, item.get("before"), item.get("after"))
+    else:
+        contexto_evento = _contexto_atribuicao(destinatario.get("papel"), nome_destinatario)
 
-    if tipo_evento == "taskCommentPosted":
-        return (
-            f"Novo comentário adicionado no chamado {task_id}. "
-            "Acesse o ClickUp para visualizar e gerenciar o chamado."
-        )
+    status_exibicao = metadados["status_atual"] or "-"
 
-    if tipo_evento == "taskStatusUpdated":
-        corpo = f"O chamado {task_id} foi alterado de {before} para {after}."
-        observacao = OBSERVACOES_POR_STATUS.get((after or "").strip().casefold())
-        if observacao:
-            corpo += f"\n\n{observacao}"
-        return corpo
+    return {
+        "email_assunto": f"[{identificador}] {contexto_evento['evento_titulo']}",
+        "evento_resumo": contexto_evento["evento_titulo"],
+        "cor_evento": _cor_por_status(status_exibicao),
+        "empresa_sigla": EMPRESA_SIGLA,
+        "empresa_nome": EMPRESA_NOME,
+        "destinatario_nome": nome_destinatario,
+        "chamado_id": identificador,
+        "chamado_titulo": metadados["titulo"] or "(sem título)",
+        "status_atual": status_exibicao,
+        "responsavel": metadados["responsavel_nome"],
+        "solicitante": metadados["solicitante_nome"],
+        "prioridade": metadados["prioridade"] or "-",
+        "data_evento": _formatar_data(item.get("data_epoch_ms")),
+        "chamado_url": f"https://app.clickup.com/t/{item['task_id']}",
+        **contexto_evento,
+    }
 
-    if tipo_evento == "taskAssigneeUpdated":
-        if destinatario.get("papel") == "atribuido":
-            return f"Você foi atribuído ao chamado {task_id}."
-        return f"Você foi desvinculado do chamado {task_id}."
 
-    return f"Houve uma atualização no chamado {task_id}."
+def renderizar_email(variaveis: dict) -> str:
+    return _TEMPLATE.render(**variaveis)
+
+
+def montar_email(item: dict, destinatario: dict, metadados: dict, nome_destinatario: str) -> tuple[str, str]:
+    variaveis = montar_variaveis_email(item, destinatario, metadados, nome_destinatario)
+    return variaveis["email_assunto"], renderizar_email(variaveis)
