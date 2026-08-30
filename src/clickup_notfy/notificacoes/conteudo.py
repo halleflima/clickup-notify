@@ -57,6 +57,11 @@ def _cor_por_status(status: str | None) -> str:
 
 
 def _contexto_criacao(metadados: dict) -> dict:
+    if metadados["descricao"]:
+        texto_label = "Descrição do solicitante"
+    else:
+        texto_label = None
+
     return {
         "evento_tipo": "Novo chamado",
         "evento_titulo": "Um novo chamado foi aberto",
@@ -64,7 +69,7 @@ def _contexto_criacao(metadados: dict) -> dict:
         "alteracao_label": None,
         "alteracao_de": None,
         "alteracao_para": None,
-        "texto_label": "Descrição do solicitante" if metadados["descricao"] else None,
+        "texto_label": texto_label,
         "texto_corpo": _truncar_descricao(metadados["descricao"]),
     }
 
