@@ -5,8 +5,8 @@ from email.mime.text import MIMEText
 logger = logging.getLogger(__name__)
 
 
-def tentar_enviar(config, destinatario_email: str, assunto: str, corpo: str) -> bool:
-    mensagem = MIMEText(corpo)
+def tentar_enviar(config, destinatario_email: str, assunto: str, corpo_html: str) -> bool:
+    mensagem = MIMEText(corpo_html, "html", "utf-8")
     mensagem["Subject"] = assunto
     mensagem["From"] = config["EMAIL_REMETENTE"]
     mensagem["To"] = destinatario_email
