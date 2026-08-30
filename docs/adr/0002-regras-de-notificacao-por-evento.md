@@ -39,7 +39,10 @@ Cada tipo de evento usa um template de email genérico comum, com um bloco de co
 
 **Filtro de segurança contra eventos fora do escopo**: `regras.EVENTOS_SUPORTADOS` lista os 4 tipos acima. Qualquer evento recebido fora dessa lista (ex: `folderCreated`, `spaceDeleted`, `goalUpdated`) é ignorado antes de qualquer chamada à API do ClickUp ou tentativa de montar notificação — a requisição do webhook ainda responde 200 normalmente, só não gera nenhum outbox. Isso é necessário como camada de defesa mesmo com o webhook do ClickUp configurado só para os 4 eventos, porque a interface do ClickUp representa "todos os eventos" como `events: []` na API (é fácil cadastrar o webhook errado sem perceber), e também protege contra o ClickUp adicionar novos tipos de evento no futuro.
 
+**Identificador do chamado usado no email**: o ClickUp tem um ID interno alfanumérico (ex: `86ak870jk`) e, opcionalmente, um "Custom Task ID" legível configurável por workspace (ex: `DV-8165`, campo `custom_id` na API — pode vir `null` se a funcionalidade não estiver habilitada). O email sempre usa o `custom_id` quando disponível, caindo para o ID bruto só se não houver. Isso só é possível para os 3 eventos que buscam a tarefa completa (criação, comentário, status) — o `taskAssigneeUpdated` não busca a tarefa (ver acima) e por isso sempre usa o ID bruto do ClickUp no email, mesmo quando a tarefa tem um `custom_id` configurado.
+
 ## Consequências
 - Fácil de estender para outros eventos ou sub-casos de status no futuro, sem mudar a arquitetura de envio.
 - Depende de o campo "solicitante" continuar sendo um person picker no ClickUp; se isso mudar (ex: virar campo de texto livre), a resolução por ID deixa de funcionar e precisa ser revisitada.
 - Eventos fora do escopo nunca geram chamada à API do ClickUp nem notificação — o custo de processá-los é desprezível (uma checagem de conjunto).
+- Emails de atribuição (`taskAssigneeUpdated`) mostram o ID bruto do ClickUp em vez do `custom_id` legível — inconsistência conhecida e aceita, para não reintroduzir uma chamada à API nesse evento só por causa da exibição.
