@@ -39,7 +39,9 @@ Pensado pra rodar num servidor da empresa com IP público fixo (ver [ADR-0010](d
 ### 1. Pré-requisitos fora do servidor
 
 - Registro DNS tipo A do domínio escolhido (ex: `notify.cmmsistemas.com.br`) apontando pro IP fixo do servidor.
-- Portas 80 e 443 liberadas no firewall (necessárias pro Caddy emitir o certificado HTTPS).
+- Portas 80 e 443 liberadas no firewall, redirecionando pro servidor (necessárias pro Caddy emitir o certificado HTTPS).
+
+> **Se a porta 443 externa não estiver disponível** (ex: servidor atrás de um firewall/NAT compartilhado, como pfSense, onde essa porta já está em uso por outro serviço): ver [ADR-0010, seção "Porta 443 externa indisponível"](docs/adr/0010-deploy-em-producao.md). Resumo: a infra mapeia uma porta externa alternativa (ex: `8443`) pra porta 443 interna do servidor, a URL do webhook cadastrada no ClickUp passa a incluir essa porta, e o Caddy precisa trocar o método de emissão do certificado (desafio via DNS em vez de HTTP) — ainda pendente de confirmar com a infra qual provedor de DNS a empresa usa.
 
 ### 2. Conectar e instalar o Docker (se ainda não tiver)
 
@@ -94,7 +96,7 @@ Um `HTTP/2 200` confirma que o HTTPS está funcionando.
 
 ### 7. Cadastrar o webhook no ClickUp
 
-Aponte (ou atualize, se já existir um) o webhook no ClickUp para `https://<DOMAIN>/webhooks/clickup`, usando o mesmo `CLICKUP_WEBHOOK_SECRET` configurado no `.env`.
+Aponte (ou atualize, se já existir um) o webhook no ClickUp para `https://<DOMAIN>/webhooks/clickup`, usando o mesmo `CLICKUP_WEBHOOK_SECRET` configurado no `.env`. Se estiver usando uma porta externa alternativa (ver observação no passo 1), inclua a porta na URL: `https://<DOMAIN>:<porta>/webhooks/clickup`.
 
 ### Atualizando uma versão já em produção
 
