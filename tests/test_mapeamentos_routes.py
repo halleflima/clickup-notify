@@ -70,6 +70,21 @@ def test_criar_mapeamento_com_corpo_lista_retorna_400_em_vez_de_500(client):
     resposta = client.post("/mapeamentos-email", json=corpo_lista, headers=autorizacao())
 
     assert resposta.status_code == 400
+    assert "lista" in resposta.get_json()["erro"]
+
+
+def test_criar_mapeamento_com_json_malformado_retorna_400_com_mensagem_distinta(client):
+    corpo_com_virgula_sobrando = b'{"nome": "Fulano",}'
+
+    resposta = client.post(
+        "/mapeamentos-email",
+        data=corpo_com_virgula_sobrando,
+        content_type="application/json",
+        headers=autorizacao(),
+    )
+
+    assert resposta.status_code == 400
+    assert "sintaxe" in resposta.get_json()["erro"]
 
 
 def test_obter_mapeamento_inexistente_retorna_404(client):

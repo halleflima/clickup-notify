@@ -13,20 +13,30 @@ def _conexao():
     return db.conectar(current_app.config["DATABASE_PATH"])
 
 
-def _corpo_json_como_dict() -> dict | None:
-    """Retorna o corpo JSON da requisicao como dict, ou None se ausente,
-    invalido, ou de outro tipo (ex: uma lista) - protege as rotas de POST
-    e PATCH de tentarem tratar um array/string/numero como se fosse objeto."""
+_NOME_TIPO_EM_PORTUGUES = {list: "lista", str: "texto", int: "numero", float: "numero", bool: "booleano"}
+
+
+def _corpo_json_como_dict() -> tuple[dict | None, str | None]:
+    """Retorna (dados, None) se o corpo for um objeto JSON valido, ou
+    (None, mensagem_de_erro) caso contrario - distinguindo JSON malformado
+    (erro de sintaxe) de JSON valido mas do tipo errado (ex: uma lista)."""
     dados = request.get_json(silent=True)
-    return dados if isinstance(dados, dict) else None
+
+    if dados is None:
+        return None, "corpo ausente ou nao e um JSON valido (verifique a sintaxe, ex: virgula sobrando)"
+    if not isinstance(dados, dict):
+        nome_tipo = _NOME_TIPO_EM_PORTUGUES.get(type(dados), type(dados).__name__)
+        return None, f"corpo precisa ser um objeto JSON ({{...}}), recebido: {nome_tipo}"
+
+    return dados, None
 
 
 @mapeamentos_bp.route("", methods=["POST"])
 @exigir_bearer_token
 def criar_mapeamento():
-    dados = _corpo_json_como_dict()
-    if dados is None:
-        return jsonify({"erro": "corpo da requisicao precisa ser um objeto JSON"}), 400
+    dados, erro = _corpo_json_como_dict()
+    if erro is not None:
+        return jsonify({"erro": erro}), 400
 
     faltando = CAMPOS_OBRIGATORIOS - dados.keys()
     if faltando:
@@ -79,9 +89,9 @@ def obter_mapeamento(clickup_user_id):
 @mapeamentos_bp.route("/<int:clickup_user_id>", methods=["PATCH"])
 @exigir_bearer_token
 def atualizar_mapeamento(clickup_user_id):
-    dados = _corpo_json_como_dict()
-    if dados is None:
-        return jsonify({"erro": "corpo da requisicao precisa ser um objeto JSON"}), 400
+    dados, erro = _corpo_json_como_dict()
+    if erro is not None:
+        return jsonify({"erro": erro}), 400
 
     conexao = _conexao()
     try:
