@@ -29,54 +29,71 @@ def _mapa_pessoas(pessoas: list[dict]) -> dict[int, dict]:
     return {pessoa["id"]: pessoa for pessoa in pessoas}
 
 
-def _resolver_contexto_atribuicao(item: dict) -> tuple[list[dict], dict[int, dict], str]:
-    pessoas_antes = _extrair_pessoas(item["before"])
-    pessoas_depois = _extrair_pessoas(item["after"])
-
-    destinatarios = regras.resolver_destinatarios_atribuicao(
-        autor_id=item["autor_id"],
-        responsaveis_ids_antes=[pessoa["id"] for pessoa in pessoas_antes],
-        responsaveis_ids_depois=[pessoa["id"] for pessoa in pessoas_depois],
-    )
-    # Este evento nao busca a tarefa na API (ver ADR-0002), entao nao temos
-    # como saber o custom_id aqui - usa o id bruto do ClickUp mesmo.
-    return destinatarios, _mapa_pessoas(pessoas_antes + pessoas_depois), item["task_id"]
+def _nomes_ou(pessoas: list[dict], texto_vazio: str) -> str:
+    nomes = [pessoa.get("nome") or pessoa.get("email") or "desconhecido" for pessoa in pessoas if pessoa]
+    return ", ".join(nomes) if nomes else texto_vazio
 
 
-def _resolver_contexto_via_tarefa(item: dict, config) -> tuple[list[dict], dict[int, dict], str]:
-    tarefa = clickup_api.buscar_tarefa(item["task_id"], config["CLICKUP_API_TOKEN"])
-    identificador_tarefa = tarefa.get("custom_id") or item["task_id"]
-    responsaveis = clickup_api.extrair_responsaveis(tarefa)
-    solicitante = clickup_api.extrair_solicitante(tarefa)
-    responsaveis_ids = [responsavel["id"] for responsavel in responsaveis]
-    solicitante_id = solicitante["id"] if solicitante else None
-    pessoas_conhecidas = _mapa_pessoas(responsaveis + ([solicitante] if solicitante else []))
-
-    if item["tipo_evento"] == "taskCreated":
-        destinatarios = regras.resolver_destinatarios_criacao(solicitante_id, responsaveis_ids)
-        return destinatarios, pessoas_conhecidas, identificador_tarefa
-
-    destinatarios = regras.resolver_destinatarios_envolvidos(
-        item["autor_id"], solicitante_id, responsaveis_ids
-    )
-    return destinatarios, pessoas_conhecidas, identificador_tarefa
+def _metadados_da_tarefa(
+    tarefa: dict, responsaveis: list[dict], solicitante: dict | None, task_id_bruto: str
+) -> dict:
+    return {
+        "identificador": tarefa.get("custom_id") or task_id_bruto,
+        "titulo": clickup_api.extrair_nome_tarefa(tarefa),
+        "prioridade": clickup_api.extrair_prioridade(tarefa),
+        "descricao": clickup_api.extrair_descricao(tarefa),
+        "status_atual": clickup_api.extrair_status_atual(tarefa),
+        "responsavel_nome": _nomes_ou(responsaveis, "Não atribuído"),
+        "solicitante_nome": _nomes_ou([solicitante] if solicitante else [], "-"),
+    }
 
 
-def resolver_contexto_evento(item: dict, config) -> tuple[list[dict], dict[int, dict], str]:
+def resolver_contexto_evento(item: dict, config) -> tuple[list[dict], dict[int, dict], dict]:
     """Resolve quem deve ser notificado, o que se sabe (email/nome) de cada
-    um, e o identificador de exibicao do chamado (custom_id tipo "DV-8165"
-    quando disponivel, senao o id bruto do ClickUp).
+    um, e os metadados de exibicao do chamado (titulo, prioridade, status
+    atual, etc - ver _metadados_da_tarefa).
 
     O webhook do ClickUp pode estar inscrito em "*" (todos os eventos) -
     qualquer tipo fora de EVENTOS_SUPORTADOS e ignorado aqui, sem chamar a
     API do ClickUp nem tentar montar notificacao pra algo que nao mapeamos.
+
+    Busca a tarefa completa pros 4 eventos suportados (inclusive
+    taskAssigneeUpdated, que antes nao buscava) - decisao revisada pra
+    poder exibir titulo/status/prioridade tambem nesse tipo de evento.
     """
     if item["tipo_evento"] not in regras.EVENTOS_SUPORTADOS:
-        return [], {}, item["task_id"]
+        return [], {}, {"identificador": item["task_id"]}
+
+    tarefa = clickup_api.buscar_tarefa(item["task_id"], config["CLICKUP_API_TOKEN"])
+    responsaveis = clickup_api.extrair_responsaveis(tarefa)
+    solicitante = clickup_api.extrair_solicitante(tarefa)
+    responsaveis_ids = [responsavel["id"] for responsavel in responsaveis]
+    solicitante_id = solicitante["id"] if solicitante else None
+    metadados = _metadados_da_tarefa(tarefa, responsaveis, solicitante, item["task_id"])
 
     if item["tipo_evento"] == "taskAssigneeUpdated":
-        return _resolver_contexto_atribuicao(item)
-    return _resolver_contexto_via_tarefa(item, config)
+        pessoas_antes = _extrair_pessoas(item["before"])
+        pessoas_depois = _extrair_pessoas(item["after"])
+        destinatarios = regras.resolver_destinatarios_atribuicao(
+            autor_id=item["autor_id"],
+            responsaveis_ids_antes=[pessoa["id"] for pessoa in pessoas_antes],
+            responsaveis_ids_depois=[pessoa["id"] for pessoa in pessoas_depois],
+        )
+        pessoas_conhecidas = _mapa_pessoas(
+            pessoas_antes + pessoas_depois + responsaveis + ([solicitante] if solicitante else [])
+        )
+        return destinatarios, pessoas_conhecidas, metadados
+
+    pessoas_conhecidas = _mapa_pessoas(responsaveis + ([solicitante] if solicitante else []))
+
+    if item["tipo_evento"] == "taskCreated":
+        destinatarios = regras.resolver_destinatarios_criacao(solicitante_id, responsaveis_ids)
+        return destinatarios, pessoas_conhecidas, metadados
+
+    destinatarios = regras.resolver_destinatarios_envolvidos(
+        item["autor_id"], solicitante_id, responsaveis_ids
+    )
+    return destinatarios, pessoas_conhecidas, metadados
 
 
 def _garantir_mapeamento(conexao, clickup_user_id: int, pessoa_info: dict | None) -> None:
@@ -102,10 +119,12 @@ def _resolver_email_destino(conexao, clickup_user_id: int, config) -> str:
 
 
 def processar_evento(conexao, item: dict, config) -> None:
-    destinatarios, pessoas_conhecidas, identificador_tarefa = resolver_contexto_evento(item, config)
+    destinatarios, pessoas_conhecidas, metadados = resolver_contexto_evento(item, config)
 
     for clickup_user_id, pessoa_info in pessoas_conhecidas.items():
         _garantir_mapeamento(conexao, clickup_user_id, pessoa_info)
+
+    identificador_tarefa = metadados["identificador"]
 
     for destinatario in destinatarios:
         email_destino = _resolver_email_destino(conexao, destinatario["clickup_user_id"], config)

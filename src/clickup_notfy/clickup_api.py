@@ -62,3 +62,26 @@ def extrair_solicitante(tarefa: dict, nome_campo: str = NOME_CAMPO_SOLICITANTE) 
 def extrair_solicitante_id(tarefa: dict, nome_campo: str = NOME_CAMPO_SOLICITANTE) -> int | None:
     solicitante = extrair_solicitante(tarefa, nome_campo)
     return solicitante["id"] if solicitante else None
+
+
+_PRIORIDADE_EM_PORTUGUES = {"urgent": "Urgente", "high": "Alta", "normal": "Normal", "low": "Baixa"}
+
+
+def extrair_prioridade(tarefa: dict) -> str | None:
+    prioridade = tarefa.get("priority")
+    if not prioridade:
+        return None
+    chave = (prioridade.get("priority") or "").casefold()
+    return _PRIORIDADE_EM_PORTUGUES.get(chave)
+
+
+def extrair_status_atual(tarefa: dict) -> str | None:
+    return (tarefa.get("status") or {}).get("status")
+
+
+def extrair_descricao(tarefa: dict) -> str | None:
+    return tarefa.get("text_content") or tarefa.get("description") or None
+
+
+def extrair_nome_tarefa(tarefa: dict) -> str | None:
+    return tarefa.get("name")

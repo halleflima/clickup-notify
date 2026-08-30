@@ -3,7 +3,7 @@ import responses
 
 from clickup_notfy import db
 from clickup_notfy.mapeamentos import repository as mapeamentos_repository
-from clickup_notfy.notificacoes.processador import processar_evento
+from clickup_notfy.notificacoes.processador import processar_evento, resolver_contexto_evento
 
 CONFIG = {
     "CLICKUP_API_TOKEN": "pk_teste",
@@ -162,8 +162,24 @@ def test_evento_nao_suportado_e_ignorado_sem_chamar_clickup(conexao):
     assert notificacoes == []
 
 
-def test_processa_atribuicao_nao_chama_api_do_clickup(conexao):
+def mockar_tarefa_generica():
+    """Tarefa minima, sem responsavel/solicitante - usada nos testes de
+    atribuicao onde so a resolucao de before/after importa."""
+    responses.add(
+        responses.GET,
+        "https://api.clickup.com/api/v2/task/abc123",
+        json={"id": "abc123", "assignees": [], "custom_fields": []},
+        status=200,
+    )
+
+
+@responses.activate
+def test_processa_atribuicao_tambem_busca_a_tarefa(conexao):
+    """Revisado (Q2 do template de email): antes esse evento nao buscava a
+    tarefa; agora busca, pra ter titulo/status/prioridade no email tambem
+    nesse tipo de evento."""
     mapeamentos_repository.criar(conexao, 222, "ciclano@gmail.com", "ciclano@empresa.com", "Ciclano")
+    mockar_tarefa_generica()
     item = {
         "id": "hist-2",
         "tipo_evento": "taskAssigneeUpdated",
@@ -173,17 +189,19 @@ def test_processa_atribuicao_nao_chama_api_do_clickup(conexao):
         "after": [222],
     }
 
-    with responses.RequestsMock():
-        processar_evento(conexao, item, CONFIG)
+    processar_evento(conexao, item, CONFIG)
 
     notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
     assert notificacoes[0]["destinatario_email"] == "ciclano@empresa.com"
+    assert len(responses.calls) == 1
 
 
+@responses.activate
 def test_processa_atribuicao_com_after_como_objeto_unico_nao_lista(conexao):
     """Formato real confirmado em producao: para 1 pessoa, o ClickUp manda
     um objeto, nao uma lista - iterar isso como lista quebra silenciosamente
     (itera as chaves do dict) se nao for tratado."""
+    mockar_tarefa_generica()
     item = {
         "id": "hist-3",
         "tipo_evento": "taskAssigneeUpdated",
@@ -197,8 +215,7 @@ def test_processa_atribuicao_com_after_como_objeto_unico_nao_lista(conexao):
         },
     }
 
-    with responses.RequestsMock():
-        processar_evento(conexao, item, CONFIG)
+    processar_evento(conexao, item, CONFIG)
 
     notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
     assert len(notificacoes) == 1
@@ -208,9 +225,11 @@ def test_processa_atribuicao_com_after_como_objeto_unico_nao_lista(conexao):
     assert mapeamento["nome"] == "Ciclano"
 
 
+@responses.activate
 def test_processa_autoatribuicao_com_after_como_objeto_unico_e_suprimida(conexao):
     """Mesmo cenario, mas quem se atribui e o proprio autor da acao - nao
     deve gerar nenhuma notificacao (regra de supressao por ator)."""
+    mockar_tarefa_generica()
     item = {
         "id": "hist-4",
         "tipo_evento": "taskAssigneeUpdated",
@@ -224,8 +243,7 @@ def test_processa_autoatribuicao_com_after_como_objeto_unico_e_suprimida(conexao
         },
     }
 
-    with responses.RequestsMock():
-        processar_evento(conexao, item, CONFIG)
+    processar_evento(conexao, item, CONFIG)
 
     notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
     assert notificacoes == []
@@ -303,3 +321,51 @@ def test_sem_custom_id_usa_id_bruto_no_conteudo(conexao):
 
     notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
     assert "abc123" in notificacoes[0]["assunto"]
+
+
+@responses.activate
+def test_resolver_contexto_evento_retorna_metadados_da_tarefa(conexao):
+    responses.add(
+        responses.GET,
+        "https://api.clickup.com/api/v2/task/abc123",
+        json={
+            "id": "abc123",
+            "custom_id": "DV-8165",
+            "name": "Erro ao gerar boleto",
+            "priority": {"priority": "high"},
+            "text_content": "Descricao do problema",
+            "status": {"status": "em desenvolvimento"},
+            "assignees": [{"id": 111, "username": "Fulano", "email": "fulano@gmail.com"}],
+            "custom_fields": [],
+        },
+        status=200,
+    )
+
+    _, _, metadados = resolver_contexto_evento(item_criacao(), CONFIG)
+
+    assert metadados == {
+        "identificador": "DV-8165",
+        "titulo": "Erro ao gerar boleto",
+        "prioridade": "Alta",
+        "descricao": "Descricao do problema",
+        "status_atual": "em desenvolvimento",
+        "responsavel_nome": "Fulano",
+        "solicitante_nome": "-",
+    }
+
+
+@responses.activate
+def test_metadados_da_tarefa_tambem_disponivel_na_atribuicao(conexao):
+    mockar_tarefa_generica()
+    item = {
+        "id": "hist-5",
+        "tipo_evento": "taskAssigneeUpdated",
+        "task_id": "abc123",
+        "autor_id": 999,
+        "before": [],
+        "after": [222],
+    }
+
+    _, _, metadados = resolver_contexto_evento(item, CONFIG)
+
+    assert metadados["identificador"] == "abc123"

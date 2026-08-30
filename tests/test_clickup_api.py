@@ -2,10 +2,14 @@ import responses
 
 from clickup_notfy.clickup_api import (
     buscar_tarefa,
+    extrair_descricao,
+    extrair_nome_tarefa,
+    extrair_prioridade,
     extrair_responsaveis,
     extrair_responsaveis_ids,
     extrair_solicitante,
     extrair_solicitante_id,
+    extrair_status_atual,
 )
 
 
@@ -121,3 +125,36 @@ def test_extrair_solicitante_e_case_insensitive():
     }
 
     assert extrair_solicitante(tarefa)["id"] == 111
+
+
+def test_extrair_prioridade_traduzida():
+    assert extrair_prioridade({"priority": {"priority": "urgent"}}) == "Urgente"
+    assert extrair_prioridade({"priority": {"priority": "high"}}) == "Alta"
+    assert extrair_prioridade({"priority": {"priority": "normal"}}) == "Normal"
+    assert extrair_prioridade({"priority": {"priority": "low"}}) == "Baixa"
+
+
+def test_extrair_prioridade_ausente_retorna_none():
+    assert extrair_prioridade({"priority": None}) is None
+    assert extrair_prioridade({}) is None
+
+
+def test_extrair_status_atual():
+    assert extrair_status_atual({"status": {"status": "em desenvolvimento"}}) == "em desenvolvimento"
+
+
+def test_extrair_status_atual_ausente_retorna_none():
+    assert extrair_status_atual({}) is None
+
+
+def test_extrair_descricao_prefere_text_content():
+    tarefa = {"text_content": "texto puro", "description": "texto com **markdown**"}
+    assert extrair_descricao(tarefa) == "texto puro"
+
+
+def test_extrair_descricao_ausente_retorna_none():
+    assert extrair_descricao({}) is None
+
+
+def test_extrair_nome_tarefa():
+    assert extrair_nome_tarefa({"name": "Erro ao gerar boleto"}) == "Erro ao gerar boleto"
