@@ -1,6 +1,10 @@
+import logging
+
 from clickup_notfy import clickup_api
 from clickup_notfy.mapeamentos import repository as mapeamentos_repository
 from clickup_notfy.notificacoes import conteudo, email_sender, outbox_repository, regras
+
+logger = logging.getLogger(__name__)
 
 
 def _extrair_pessoas(valores) -> list[dict]:
@@ -141,8 +145,19 @@ def processar_evento(conexao, item: dict, config) -> None:
 
         assunto, corpo_html = conteudo.montar_email(item, destinatario, metadados, nome_destinatario)
 
+        if outbox_repository.ja_enviada_recentemente(
+            conexao, item["task_id"], item["tipo_evento"], email_destino, corpo_html
+        ):
+            logger.info(
+                "Notificacao identica ja enviada recentemente pro chamado %s (tipo %s, destinatario %s) - ignorando duplicata",
+                item["task_id"],
+                item["tipo_evento"],
+                email_destino,
+            )
+            continue
+
         notificacao_id = outbox_repository.criar_pendente(
-            conexao, item["id"], email_destino, item["tipo_evento"], assunto, corpo_html
+            conexao, item["id"], item["task_id"], email_destino, item["tipo_evento"], assunto, corpo_html
         )
         sucesso = email_sender.tentar_enviar(config, email_destino, assunto, corpo_html)
         outbox_repository.registrar_resultado_envio(conexao, notificacao_id, sucesso)

@@ -28,7 +28,7 @@ def test_retentar_pendentes_marca_como_enviado_quando_smtp_funciona(conexao, mon
     )
     conexao_db = db.conectar(conexao)
     notificacao_id = outbox_repository.criar_pendente(
-        conexao_db, "hist-1", "a@empresa.com", "taskCreated", "Assunto", "Corpo"
+        conexao_db, "hist-1", "abc123", "a@empresa.com", "taskCreated", "Assunto", "Corpo"
     )
     conexao_db.close()
 
@@ -49,7 +49,7 @@ def test_retentar_pendentes_mantem_pendente_quando_smtp_falha(conexao, monkeypat
     )
     conexao_db = db.conectar(conexao)
     notificacao_id = outbox_repository.criar_pendente(
-        conexao_db, "hist-1", "a@empresa.com", "taskCreated", "Assunto", "Corpo"
+        conexao_db, "hist-1", "abc123", "a@empresa.com", "taskCreated", "Assunto", "Corpo"
     )
     conexao_db.close()
 
