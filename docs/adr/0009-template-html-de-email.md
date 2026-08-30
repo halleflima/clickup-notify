@@ -23,6 +23,8 @@ Os emails de notificação eram texto puro (`MIMEText` simples), sem identidade 
 
 **Rodapé sem links de autoatendimento**: o design original tinha "Gerenciar notificações" e "Cancelar inscrição", apontando pra páginas que não existem no sistema. Removidos por ora (link quebrado não é aceitável em produção) — telemetria/preferências de notificação viram melhoria futura, registrada em issue separada no GitHub, não nesta implementação.
 
+**Aviso de "não responda"**: adicionado um selo destacado no rodapé ("E-MAIL AUTOMÁTICO · NÃO RESPONDA A ESTA MENSAGEM"), no mesmo padrão visual do rótulo do tipo de evento no topo do card (badge com fundo colorido). Motivo: a caixa de email remetente não é monitorada, e sem um aviso visível o destinatário pode tentar responder esperando que alguém leia.
+
 **Envio como HTML puro** (não multipart com fallback texto): `email_sender.py` manda `MIMEText(corpo_html, "html", "utf-8")` diretamente, sem uma versão em texto puro alternativa. Simplificação deliberada — a grande maioria dos clientes de email modernos renderiza HTML sem problema, e manter duas versões do conteúdo sincronizadas adicionaria complexidade desproporcional ao tamanho do projeto.
 
 **Data do evento**: `history_items[].date` (epoch em milissegundos, como string) passou a ser extraído no parser (`data_epoch_ms`) e formatado como `DD/MM/AAAA às HH:MM`. Se ausente ou inválido, usa o momento atual como aproximação.
