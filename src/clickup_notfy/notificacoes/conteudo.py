@@ -49,15 +49,10 @@ def _cor_por_status(status: str | None) -> str:
 
 
 def _contexto_criacao(metadados: dict) -> dict:
-    tem_responsavel = metadados["responsavel_nome"] != NAO_ATRIBUIDO
     return {
         "evento_tipo": "Novo chamado",
         "evento_titulo": "Um novo chamado foi aberto",
-        "evento_descricao": (
-            "O chamado abaixo foi aberto."
-            if tem_responsavel
-            else "O chamado abaixo entrou na fila da sua equipe e ainda não tem responsável."
-        ),
+        "evento_descricao": "O chamado abaixo foi criado com sucesso.",
         "alteracao_label": None,
         "alteracao_de": None,
         "alteracao_para": None,
