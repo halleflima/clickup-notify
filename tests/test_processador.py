@@ -229,3 +229,36 @@ def test_processa_autoatribuicao_com_after_como_objeto_unico_e_suprimida(conexao
 
     notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
     assert notificacoes == []
+
+
+@responses.activate
+def test_autor_suprimido_ainda_e_auto_cadastrado(conexao):
+    """Mesmo quando ninguem e notificado (autor e o unico responsavel,
+    suprimido pela propria acao), quem apareceu no evento deve ser
+    cadastrado - pra o time ir sendo conhecido aos poucos."""
+    responses.add(
+        responses.GET,
+        "https://api.clickup.com/api/v2/task/abc123",
+        json={
+            "assignees": [{"id": 111, "username": "Fulano", "email": "fulano@gmail.com"}],
+            "custom_fields": [],
+        },
+        status=200,
+    )
+    item = {
+        "id": "hist-5",
+        "tipo_evento": "taskStatusUpdated",
+        "task_id": "abc123",
+        "autor_id": 111,
+        "before": "a fazer",
+        "after": "em desenvolvimento",
+    }
+
+    processar_evento(conexao, item, CONFIG)
+
+    notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
+    assert notificacoes == []
+
+    mapeamento = mapeamentos_repository.buscar_por_id(conexao, 111)
+    assert mapeamento is not None
+    assert mapeamento["nome"] == "Fulano"
