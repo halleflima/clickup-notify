@@ -74,30 +74,36 @@ def resolver_contexto_evento(item: dict, config) -> tuple[list[dict], dict[int, 
     return _resolver_contexto_via_tarefa(item, config)
 
 
-def _resolver_email_destino(conexao, clickup_user_id: int, pessoa_info: dict | None, config) -> str:
+def _garantir_mapeamento(conexao, clickup_user_id: int, pessoa_info: dict | None) -> None:
+    """Cadastra o mapeamento se ainda nao existir, independente de a pessoa
+    vir a ser notificada ou nao neste evento (ex: suprimida por ser a
+    autora da propria acao). Objetivo: o time vai sendo conhecido aos
+    poucos, mesmo em eventos que nao geram notificacao pra ninguem."""
+    if mapeamentos_repository.buscar_por_id(conexao, clickup_user_id):
+        return
+    if not pessoa_info or not pessoa_info.get("email"):
+        return
+
+    email_clickup = pessoa_info["email"]
+    nome = pessoa_info.get("nome") or email_clickup
+    mapeamentos_repository.criar(conexao, clickup_user_id, email_clickup, email_clickup, nome)
+
+
+def _resolver_email_destino(conexao, clickup_user_id: int, config) -> str:
     mapeamento = mapeamentos_repository.buscar_por_id(conexao, clickup_user_id)
-    if mapeamento:
-        if mapeamento["ativo"]:
-            return mapeamento["official_email"]
-        return config["FALLBACK_EMAIL"]
-
-    if pessoa_info and pessoa_info.get("email"):
-        email_clickup = pessoa_info["email"]
-        nome = pessoa_info.get("nome") or email_clickup
-        mapeamentos_repository.criar(conexao, clickup_user_id, email_clickup, email_clickup, nome)
-        return email_clickup
-
+    if mapeamento and mapeamento["ativo"]:
+        return mapeamento["official_email"]
     return config["FALLBACK_EMAIL"]
 
 
 def processar_evento(conexao, item: dict, config) -> None:
     destinatarios, pessoas_conhecidas = resolver_contexto_evento(item, config)
 
+    for clickup_user_id, pessoa_info in pessoas_conhecidas.items():
+        _garantir_mapeamento(conexao, clickup_user_id, pessoa_info)
+
     for destinatario in destinatarios:
-        pessoa_info = pessoas_conhecidas.get(destinatario["clickup_user_id"])
-        email_destino = _resolver_email_destino(
-            conexao, destinatario["clickup_user_id"], pessoa_info, config
-        )
+        email_destino = _resolver_email_destino(conexao, destinatario["clickup_user_id"], config)
 
         assunto = conteudo.montar_assunto(item["tipo_evento"], item["task_id"])
         corpo = conteudo.montar_corpo(
