@@ -137,7 +137,7 @@ def test_chamado_url_aponta_para_o_clickup():
 def test_montar_email_retorna_assunto_e_html_renderizado():
     assunto, corpo_html = montar_email(item_base("taskCreated"), {}, METADADOS_BASE, "Marcos")
 
-    assert assunto.startswith("[DV-8165]")
+    assert assunto == "Clickup | [DV-8165] Novo chamado"
     assert "<!DOCTYPE html>" in corpo_html
     assert "DV-8165" in corpo_html
     assert "Marcos" in corpo_html

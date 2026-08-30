@@ -139,7 +139,7 @@ def montar_variaveis_email(item: dict, destinatario: dict, metadados: dict, nome
     status_exibicao = metadados["status_atual"] or "-"
 
     return {
-        "email_assunto": f"[{identificador}] {contexto_evento['evento_titulo']}",
+        "email_assunto": f"Clickup | [{identificador}] {contexto_evento['evento_tipo']}",
         "evento_resumo": contexto_evento["evento_titulo"],
         "cor_evento": _cor_por_status(status_exibicao),
         "empresa_sigla": EMPRESA_SIGLA,
