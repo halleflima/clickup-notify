@@ -25,6 +25,8 @@ Os emails de notificação eram texto puro (`MIMEText` simples), sem identidade 
 
 **Aviso de "não responda"**: adicionado um selo destacado no rodapé ("E-MAIL AUTOMÁTICO · NÃO RESPONDA A ESTA MENSAGEM"), no mesmo padrão visual do rótulo do tipo de evento no topo do card (badge com fundo colorido). Motivo: a caixa de email remetente não é monitorada, e sem um aviso visível o destinatário pode tentar responder esperando que alguém leia.
 
+**Limite de tamanho da descrição do solicitante**: a descrição da tarefa (mostrada só na criação) é truncada em `LIMITE_DESCRICAO_CARACTERES = 200` caracteres, cortando em palavra inteira e adicionando reticências (`textwrap.shorten`, stdlib). Motivo: chamados complexos podem ter descrições longas, e o objetivo do bloco no email é dar só um resumo/começo — o texto completo fica no ClickUp, um clique de distância pelo botão "Abrir chamado".
+
 **Envio como HTML puro** (não multipart com fallback texto): `email_sender.py` manda `MIMEText(corpo_html, "html", "utf-8")` diretamente, sem uma versão em texto puro alternativa. Simplificação deliberada — a grande maioria dos clientes de email modernos renderiza HTML sem problema, e manter duas versões do conteúdo sincronizadas adicionaria complexidade desproporcional ao tamanho do projeto.
 
 **Data do evento**: `history_items[].date` (epoch em milissegundos, como string) passou a ser extraído no parser (`data_epoch_ms`) e formatado como `DD/MM/AAAA às HH:MM`. Se ausente ou inválido, usa o momento atual como aproximação.

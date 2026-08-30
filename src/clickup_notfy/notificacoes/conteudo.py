@@ -5,6 +5,7 @@ do comentario em si, so um aviso + link pro ClickUp.
 """
 
 import datetime
+import textwrap
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -32,6 +33,13 @@ EMPRESA_SIGLA = "CMM"
 EMPRESA_NOME = "CMM Sistemas de Informação"
 EMPRESA_LOGO_URL = "https://cmmsistemas.com.br/wp-content/uploads/2022/06/logo-cmm.png"
 NAO_ATRIBUIDO = "Não atribuído"
+LIMITE_DESCRICAO_CARACTERES = 200
+
+
+def _truncar_descricao(texto: str | None) -> str | None:
+    if not texto:
+        return texto
+    return textwrap.shorten(texto, width=LIMITE_DESCRICAO_CARACTERES, placeholder="...")
 
 
 def _formatar_data(data_epoch_ms) -> str:
@@ -57,7 +65,7 @@ def _contexto_criacao(metadados: dict) -> dict:
         "alteracao_de": None,
         "alteracao_para": None,
         "texto_label": "Descrição do solicitante" if metadados["descricao"] else None,
-        "texto_corpo": metadados["descricao"],
+        "texto_corpo": _truncar_descricao(metadados["descricao"]),
     }
 
 

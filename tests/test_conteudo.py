@@ -57,6 +57,26 @@ def test_criacao_sem_descricao_nao_preenche_bloco_de_texto():
     assert variaveis["texto_corpo"] is None
 
 
+def test_criacao_com_descricao_longa_trunca_com_reticencias():
+    descricao_longa = "Erro ao gerar boleto para o cliente. " * 10
+    metadados = dict(METADADOS_BASE, descricao=descricao_longa)
+
+    variaveis = montar_variaveis_email(item_base("taskCreated"), {}, metadados, "Marcos")
+
+    assert len(variaveis["texto_corpo"]) <= 200
+    assert variaveis["texto_corpo"].endswith("...")
+    assert descricao_longa.startswith(variaveis["texto_corpo"][: -len("...")].strip())
+
+
+def test_criacao_com_descricao_curta_nao_trunca():
+    metadados = dict(METADADOS_BASE, descricao="Erro 500 ao gerar boleto no fim de semana.")
+
+    variaveis = montar_variaveis_email(item_base("taskCreated"), {}, metadados, "Marcos")
+
+    assert variaveis["texto_corpo"] == "Erro 500 ao gerar boleto no fim de semana."
+    assert not variaveis["texto_corpo"].endswith("...")
+
+
 def test_comentario_nao_revela_conteudo_do_comentario():
     variaveis = montar_variaveis_email(item_base("taskCommentPosted"), {}, METADADOS_BASE, "Marcos")
 
