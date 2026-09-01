@@ -1,3 +1,23 @@
+# Cenario padrao: portas 80/443 externas livres, Caddy valida o
+# certificado sozinho via desafio HTTP-01 (ver ADR-0010).
 {$DOMAIN} {
 	reverse_proxy clickup-notfy:5000
 }
+
+# Cenario alternativo (porta 443 externa ja ocupada, ex: atras de
+# pfSense com IP compartilhado - ver ADR-0010 "Porta 443 externa
+# indisponivel"): trocar o bloco acima por este, preenchendo o
+# provedor de DNS assim que a infra confirmar. Tambem exige trocar a
+# imagem do Caddy no docker-compose.prod.yml por uma build customizada
+# via xcaddy com o modulo do provedor (a imagem oficial caddy:2-alpine
+# nao inclui nenhum plugin de DNS).
+#
+# {
+# 	acme_dns <provedor_aqui> {
+# 		api_token {env.DNS_API_TOKEN}
+# 	}
+# }
+#
+# {$DOMAIN} {
+# 	reverse_proxy clickup-notfy:5000
+# }
