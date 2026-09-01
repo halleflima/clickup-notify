@@ -1,8 +1,14 @@
 import pytest
+import responses
 
 from clickup_notfy import db
 from clickup_notfy.notificacoes import outbox_repository
-from clickup_notfy.scheduler import iniciar_scheduler, purgar_notificacoes_antigas, retentar_pendentes
+from clickup_notfy.scheduler import (
+    iniciar_scheduler,
+    purgar_notificacoes_antigas,
+    retentar_pendentes,
+    verificar_saude_webhook,
+)
 
 CONFIG = {
     "SMTP_HOST": "smtp.exemplo.com",
@@ -93,10 +99,112 @@ def test_purgar_remove_notificacoes_com_mais_de_dois_anos(conexao):
     assert [r["evento_id"] for r in restantes] == ["hist-recente"]
 
 
-def test_iniciar_scheduler_registra_os_tres_jobs(conexao):
+def test_iniciar_scheduler_registra_os_quatro_jobs(conexao):
     scheduler = iniciar_scheduler(dict(CONFIG, DATABASE_PATH=conexao))
     try:
         ids = {job.id for job in scheduler.get_jobs()}
-        assert ids == {"retry_pendentes", "purge_diario", "vacuum_mensal"}
+        assert ids == {
+            "retry_pendentes",
+            "purge_diario",
+            "vacuum_mensal",
+            "verificar_saude_webhook",
+        }
     finally:
         scheduler.shutdown(wait=False)
+
+
+CONFIG_SAUDE = dict(
+    CONFIG,
+    CLICKUP_API_TOKEN='pk_teste',
+    CLICKUP_TEAM_ID='9007177246',
+    CLICKUP_WEBHOOK_ID='cc6e40b3',
+    EMAILS_ALERTA_OPERACIONAL='admin@empresa.com',
+)
+
+
+def _mockar_saude_webhook(status: str, fail_count: int):
+    responses.add(
+        responses.GET,
+        'https://api.clickup.com/api/v2/team/9007177246/webhook',
+        json={'webhooks': [{'id': 'cc6e40b3', 'health': {'status': status, 'fail_count': fail_count}}]},
+        status=200,
+    )
+
+
+@responses.activate
+def test_verificar_saude_webhook_sem_team_ou_webhook_id_nao_faz_nada(conexao):
+    config = dict(CONFIG, DATABASE_PATH=conexao)
+
+    verificar_saude_webhook(config)
+
+    assert len(responses.calls) == 0
+
+
+@responses.activate
+def test_verificar_saude_webhook_abaixo_do_limite_nao_alerta(conexao, monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(
+        'clickup_notfy.scheduler.alerta_operacional.email_sender.tentar_enviar',
+        lambda *a, **k: chamadas.append(1) or True,
+    )
+    _mockar_saude_webhook(status='active', fail_count=3)
+
+    verificar_saude_webhook(dict(CONFIG_SAUDE, DATABASE_PATH=conexao, LIMITE_FAIL_COUNT_ALERTA=20))
+
+    assert chamadas == []
+
+
+@responses.activate
+def test_verificar_saude_webhook_no_limite_dispara_alerta(conexao, monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(
+        'clickup_notfy.scheduler.alerta_operacional.email_sender.tentar_enviar',
+        lambda *a, **k: chamadas.append(1) or True,
+    )
+    _mockar_saude_webhook(status='active', fail_count=25)
+
+    verificar_saude_webhook(dict(CONFIG_SAUDE, DATABASE_PATH=conexao, LIMITE_FAIL_COUNT_ALERTA=20))
+
+    assert len(chamadas) == 1
+
+
+@responses.activate
+def test_verificar_saude_webhook_suspenso_dispara_alerta_mesmo_com_fail_count_baixo(conexao, monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(
+        'clickup_notfy.scheduler.alerta_operacional.email_sender.tentar_enviar',
+        lambda *a, **k: chamadas.append(1) or True,
+    )
+    _mockar_saude_webhook(status='suspended', fail_count=5)
+
+    verificar_saude_webhook(dict(CONFIG_SAUDE, DATABASE_PATH=conexao, LIMITE_FAIL_COUNT_ALERTA=20))
+
+    assert len(chamadas) == 1
+
+
+@responses.activate
+def test_verificar_saude_webhook_id_nao_encontrado_nao_quebra(conexao, monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(
+        'clickup_notfy.scheduler.alerta_operacional.email_sender.tentar_enviar',
+        lambda *a, **k: chamadas.append(1) or True,
+    )
+    responses.add(
+        responses.GET,
+        'https://api.clickup.com/api/v2/team/9007177246/webhook',
+        json={'webhooks': []},
+        status=200,
+    )
+
+    verificar_saude_webhook(dict(CONFIG_SAUDE, DATABASE_PATH=conexao))
+
+    assert chamadas == []
+
+
+def test_verificar_saude_webhook_erro_de_rede_nao_propaga(conexao, monkeypatch):
+    def _levanta_erro(*a, **k):
+        raise RuntimeError('timeout')
+
+    monkeypatch.setattr('clickup_notfy.scheduler.clickup_api.buscar_saude_webhook', _levanta_erro)
+
+    verificar_saude_webhook(dict(CONFIG_SAUDE, DATABASE_PATH=conexao))

@@ -38,6 +38,14 @@ CREATE TABLE IF NOT EXISTS notificacoes_enviadas (
 CREATE INDEX IF NOT EXISTS idx_notificacoes_status ON notificacoes_enviadas (status);
 CREATE INDEX IF NOT EXISTS idx_notificacoes_created_at ON notificacoes_enviadas (created_at);
 CREATE INDEX IF NOT EXISTS idx_notificacoes_dedup ON notificacoes_enviadas (task_id, tipo_evento, destinatario_email);
+
+CREATE TABLE IF NOT EXISTS alertas_operacionais (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo TEXT NOT NULL,
+    enviado_em TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_alertas_tipo_enviado_em ON alertas_operacionais (tipo, enviado_em);
 """
 
 
