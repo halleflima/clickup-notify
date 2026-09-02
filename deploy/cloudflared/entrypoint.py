@@ -22,10 +22,14 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 
 PADRAO_URL_TUNEL = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
+
+MAX_TENTATIVAS = 8
+ESPERA_ENTRE_TENTATIVAS_SEGUNDOS = 20
 
 
 def atualizar_endpoint_webhook(webhook_id: str, endpoint_url: str, token: str) -> None:
@@ -40,13 +44,40 @@ def atualizar_endpoint_webhook(webhook_id: str, endpoint_url: str, token: str) -
         print(f"[watcher] ClickUp respondeu {resposta.status} ao atualizar endpoint", flush=True)
 
 
+def atualizar_endpoint_webhook_com_retry(webhook_id: str, endpoint_url: str, token: str) -> bool:
+    """Tenta atualizar o endpoint varias vezes antes de desistir - a API do
+    ClickUp pode rejeitar uma tentativa isolada por instabilidade momentanea
+    do proprio tunel sendo registrado (confirmado em producao: erro
+    OAUTH_194 "Specified URL not allowed" numa tentativa que, repetida
+    poucos segundos depois, funcionou normalmente). Como a chamada e
+    idempotente (mesmo valor, reenviado), repetir e seguro."""
+    for tentativa in range(1, MAX_TENTATIVAS + 1):
+        try:
+            atualizar_endpoint_webhook(webhook_id, endpoint_url, token)
+            return True
+        except urllib.error.HTTPError as erro:
+            corpo_erro = erro.read().decode(errors="replace")
+            print(
+                f"[watcher] Tentativa {tentativa}/{MAX_TENTATIVAS} falhou "
+                f"(HTTP {erro.code}): {corpo_erro}",
+                flush=True,
+            )
+        except urllib.error.URLError as erro:
+            print(f"[watcher] Tentativa {tentativa}/{MAX_TENTATIVAS} falhou: {erro}", flush=True)
+
+        if tentativa < MAX_TENTATIVAS:
+            time.sleep(ESPERA_ENTRE_TENTATIVAS_SEGUNDOS)
+
+    return False
+
+
 def main() -> int:
     origem = os.environ["TUNNEL_ORIGIN_URL"]
     webhook_id = os.environ["CLICKUP_WEBHOOK_ID"]
     token = os.environ["CLICKUP_API_TOKEN"]
 
     processo = subprocess.Popen(
-        ["/usr/local/bin/cloudflared", "tunnel", "--url", origem, "--log=stdout"],
+        ["/usr/local/bin/cloudflared", "tunnel", "--url", origem],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -69,18 +100,21 @@ def main() -> int:
         endpoint = f"{nova_url}/webhooks/clickup"
         print(f"[watcher] Nova URL de tunel detectada: {nova_url}", flush=True)
 
-        try:
-            atualizar_endpoint_webhook(webhook_id, endpoint, token)
+        sucesso = atualizar_endpoint_webhook_com_retry(webhook_id, endpoint, token)
+        if sucesso:
             print(f"[watcher] Endpoint do webhook atualizado para {endpoint}", flush=True)
-        except urllib.error.URLError:
-            print("[watcher] Falha ao atualizar endpoint no ClickUp - log completo:", flush=True)
-            import traceback
+        else:
+            print(
+                f"[watcher] Desistiu apos {MAX_TENTATIVAS} tentativas - endpoint do "
+                f"ClickUp continua desatualizado. O alerta operacional (ADR-0011) deve "
+                f"pegar isso na proxima verificacao de saude do webhook.",
+                flush=True,
+            )
 
-            traceback.print_exc()
-        finally:
-            # so tenta 1x por sessao do tunel - a URL nao muda de novo
-            # enquanto esse mesmo processo do cloudflared continuar rodando
-            url_ja_registrada = True
+        # so tenta atualizar 1x por sessao do tunel - a URL nao muda de novo
+        # enquanto esse mesmo processo do cloudflared continuar rodando,
+        # entao nao ha razao pra reprocessar linhas de log subsequentes
+        url_ja_registrada = True
 
     return processo.wait()
 
