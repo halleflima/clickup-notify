@@ -1,0 +1,10 @@
+services:
+  cloudflared:
+    build: ./deploy/cloudflared
+    env_file:
+      - .env
+    environment:
+      - TUNNEL_ORIGIN_URL=http://clickup-notfy:5000
+    restart: unless-stopped
+    depends_on:
+      - clickup-notfy
