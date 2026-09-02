@@ -8,8 +8,8 @@ from clickup_notfy.clickup_api import (
     extrair_prioridade,
     extrair_responsaveis,
     extrair_responsaveis_ids,
-    extrair_solicitante,
-    extrair_solicitante_id,
+    extrair_solicitantes,
+    extrair_solicitantes_ids,
     extrair_status_atual,
 )
 
@@ -39,36 +39,54 @@ def test_extrair_responsaveis_ids_sem_assignees():
     assert extrair_responsaveis_ids({}) == []
 
 
-def test_extrair_solicitante_id_campo_com_lista_de_pessoa():
+def test_extrair_solicitantes_ids_campo_com_lista_de_uma_pessoa():
     tarefa = {
         "custom_fields": [
             {"name": "Solicitante", "value": [{"id": 333, "username": "solicitante"}]}
         ]
     }
 
-    assert extrair_solicitante_id(tarefa) == 333
+    assert extrair_solicitantes_ids(tarefa) == [333]
 
 
-def test_extrair_solicitante_id_campo_com_objeto_unico():
+def test_extrair_solicitantes_ids_campo_com_lista_de_varias_pessoas():
+    """ADR-0012: o campo de pessoa do ClickUp pode ter mais de uma pessoa
+    selecionada - todas devem ser extraidas, nao so a primeira."""
+    tarefa = {
+        "custom_fields": [
+            {
+                "name": "Solicitante",
+                "value": [
+                    {"id": 333, "username": "primeiro"},
+                    {"id": 444, "username": "segundo"},
+                ],
+            }
+        ]
+    }
+
+    assert extrair_solicitantes_ids(tarefa) == [333, 444]
+
+
+def test_extrair_solicitantes_ids_campo_com_objeto_unico():
     tarefa = {"custom_fields": [{"name": "Solicitante", "value": {"id": 333}}]}
 
-    assert extrair_solicitante_id(tarefa) == 333
+    assert extrair_solicitantes_ids(tarefa) == [333]
 
 
-def test_extrair_solicitante_id_campo_vazio_retorna_none():
+def test_extrair_solicitantes_ids_campo_vazio_retorna_lista_vazia():
     tarefa = {"custom_fields": [{"name": "Solicitante", "value": []}]}
 
-    assert extrair_solicitante_id(tarefa) is None
+    assert extrair_solicitantes_ids(tarefa) == []
 
 
-def test_extrair_solicitante_id_campo_ausente_retorna_none():
+def test_extrair_solicitantes_ids_campo_ausente_retorna_lista_vazia():
     tarefa = {"custom_fields": [{"name": "Outro Campo", "value": "x"}]}
 
-    assert extrair_solicitante_id(tarefa) is None
+    assert extrair_solicitantes_ids(tarefa) == []
 
 
-def test_extrair_solicitante_id_sem_custom_fields_retorna_none():
-    assert extrair_solicitante_id({}) is None
+def test_extrair_solicitantes_ids_sem_custom_fields_retorna_lista_vazia():
+    assert extrair_solicitantes_ids({}) == []
 
 
 def test_extrair_responsaveis_traz_email_e_nome():
@@ -79,7 +97,7 @@ def test_extrair_responsaveis_traz_email_e_nome():
     ]
 
 
-def test_extrair_solicitante_traz_email_e_nome():
+def test_extrair_solicitantes_traz_email_e_nome():
     tarefa = {
         "custom_fields": [
             {
@@ -89,16 +107,35 @@ def test_extrair_solicitante_traz_email_e_nome():
         ]
     }
 
-    assert extrair_solicitante(tarefa) == {"id": 333, "email": "ciclano@gmail.com", "nome": "ciclano"}
+    assert extrair_solicitantes(tarefa) == [{"id": 333, "email": "ciclano@gmail.com", "nome": "ciclano"}]
 
 
-def test_extrair_solicitante_sem_email_retorna_none_no_campo():
+def test_extrair_solicitantes_com_mais_de_uma_pessoa():
+    tarefa = {
+        "custom_fields": [
+            {
+                "name": "Solicitante",
+                "value": [
+                    {"id": 333, "username": "ciclano", "email": "ciclano@gmail.com"},
+                    {"id": 444, "username": "beltrano", "email": "beltrano@gmail.com"},
+                ],
+            }
+        ]
+    }
+
+    assert extrair_solicitantes(tarefa) == [
+        {"id": 333, "email": "ciclano@gmail.com", "nome": "ciclano"},
+        {"id": 444, "email": "beltrano@gmail.com", "nome": "beltrano"},
+    ]
+
+
+def test_extrair_solicitantes_sem_email_retorna_none_no_campo():
     tarefa = {"custom_fields": [{"name": "Solicitante", "value": {"id": 333}}]}
 
-    assert extrair_solicitante(tarefa) == {"id": 333, "email": None, "nome": None}
+    assert extrair_solicitantes(tarefa) == [{"id": 333, "email": None, "nome": None}]
 
 
-def test_extrair_solicitante_com_emoji_no_nome_do_campo():
+def test_extrair_solicitantes_com_emoji_no_nome_do_campo():
     """Formato real confirmado em producao: o campo customizado no ClickUp
     tem um emoji/prefixo no nome (ex: "\U0001f468\u200d\u2696\ufe0f Solicitante"),
     entao uma comparacao exata de nome nunca bateria."""
@@ -111,21 +148,19 @@ def test_extrair_solicitante_com_emoji_no_nome_do_campo():
         ]
     }
 
-    assert extrair_solicitante(tarefa) == {
-        "id": 82174980,
-        "email": "hallef@gmail.com",
-        "nome": "Hallef Lima",
-    }
+    assert extrair_solicitantes(tarefa) == [
+        {"id": 82174980, "email": "hallef@gmail.com", "nome": "Hallef Lima"}
+    ]
 
 
-def test_extrair_solicitante_e_case_insensitive():
+def test_extrair_solicitantes_e_case_insensitive():
     tarefa = {
         "custom_fields": [
             {"name": "SOLICITANTE", "value": {"id": 111, "username": "x", "email": "x@gmail.com"}}
         ]
     }
 
-    assert extrair_solicitante(tarefa)["id"] == 111
+    assert extrair_solicitantes(tarefa)[0]["id"] == 111
 
 
 def test_extrair_prioridade_traduzida():

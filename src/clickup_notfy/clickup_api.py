@@ -38,30 +38,28 @@ def _buscar_custom_field(tarefa: dict, nome_campo: str) -> dict | None:
     return None
 
 
-def _normalizar_valor_pessoa(valor) -> dict | None:
-    """O campo de pessoa do ClickUp pode vir como lista (person picker) ou objeto unico."""
+def _normalizar_valores_pessoa(valor) -> list[dict]:
+    """O campo de pessoa do ClickUp pode vir como lista (person picker com
+    mais de uma pessoa selecionada) ou objeto unico (uma so pessoa) -
+    normaliza os dois formatos pra sempre devolver uma lista, sem descartar
+    ninguem quando ha mais de uma pessoa (ver ADR-0012)."""
     if isinstance(valor, list):
-        return valor[0] if valor else None
+        return [item for item in valor if isinstance(item, dict)]
     if isinstance(valor, dict):
-        return valor
-    return None
+        return [valor]
+    return []
 
 
-def extrair_solicitante(tarefa: dict, nome_campo: str = NOME_CAMPO_SOLICITANTE) -> dict | None:
+def extrair_solicitantes(tarefa: dict, nome_campo: str = NOME_CAMPO_SOLICITANTE) -> list[dict]:
     campo = _buscar_custom_field(tarefa, nome_campo)
     if campo is None:
-        return None
+        return []
 
-    bruto = _normalizar_valor_pessoa(campo.get("value"))
-    if bruto is None:
-        return None
-
-    return _pessoa(bruto)
+    return [_pessoa(bruto) for bruto in _normalizar_valores_pessoa(campo.get("value"))]
 
 
-def extrair_solicitante_id(tarefa: dict, nome_campo: str = NOME_CAMPO_SOLICITANTE) -> int | None:
-    solicitante = extrair_solicitante(tarefa, nome_campo)
-    return solicitante["id"] if solicitante else None
+def extrair_solicitantes_ids(tarefa: dict, nome_campo: str = NOME_CAMPO_SOLICITANTE) -> list[int]:
+    return [solicitante["id"] for solicitante in extrair_solicitantes(tarefa, nome_campo)]
 
 
 _PRIORIDADE_EM_PORTUGUES = {"urgent": "Urgente", "high": "Alta", "normal": "Normal", "low": "Baixa"}
