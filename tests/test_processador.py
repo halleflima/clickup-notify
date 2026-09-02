@@ -390,3 +390,36 @@ def test_dois_eventos_diferentes_do_clickup_para_mesma_criacao_nao_duplicam_emai
 
     notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
     assert len(notificacoes) == 1
+
+
+@responses.activate
+def test_criacao_com_dois_solicitantes_notifica_e_cadastra_os_dois(conexao):
+    """ADR-0012: antes so o primeiro solicitante da lista era considerado -
+    o segundo era descartado silenciosamente, sem notificacao e sem
+    auto-cadastro."""
+    responses.add(
+        responses.GET,
+        "https://api.clickup.com/api/v2/task/abc123",
+        json={
+            "assignees": [],
+            "custom_fields": [
+                {
+                    "name": "Solicitante",
+                    "value": [
+                        {"id": 111, "username": "Fulano", "email": "fulano@gmail.com"},
+                        {"id": 222, "username": "Ciclano", "email": "ciclano@gmail.com"},
+                    ],
+                }
+            ],
+        },
+        status=200,
+    )
+
+    processar_evento(conexao, item_criacao(), CONFIG)
+
+    notificacoes = conexao.execute("SELECT * FROM notificacoes_enviadas").fetchall()
+    destinatarios = {n["destinatario_email"] for n in notificacoes}
+    assert destinatarios == {"fulano@gmail.com", "ciclano@gmail.com"}
+
+    assert mapeamentos_repository.buscar_por_id(conexao, 111) is not None
+    assert mapeamentos_repository.buscar_por_id(conexao, 222) is not None

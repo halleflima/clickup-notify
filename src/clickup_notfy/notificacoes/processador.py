@@ -39,7 +39,7 @@ def _nomes_ou(pessoas: list[dict], texto_vazio: str) -> str:
 
 
 def _metadados_da_tarefa(
-    tarefa: dict, responsaveis: list[dict], solicitante: dict | None, task_id_bruto: str
+    tarefa: dict, responsaveis: list[dict], solicitantes: list[dict], task_id_bruto: str
 ) -> dict:
     return {
         "identificador": tarefa.get("custom_id") or task_id_bruto,
@@ -48,7 +48,7 @@ def _metadados_da_tarefa(
         "descricao": clickup_api.extrair_descricao(tarefa),
         "status_atual": clickup_api.extrair_status_atual(tarefa),
         "responsavel_nome": _nomes_ou(responsaveis, "Não atribuído"),
-        "solicitante_nome": _nomes_ou([solicitante] if solicitante else [], "-"),
+        "solicitante_nome": _nomes_ou(solicitantes, "-"),
     }
 
 
@@ -70,10 +70,10 @@ def resolver_contexto_evento(item: dict, config) -> tuple[list[dict], dict[int, 
 
     tarefa = clickup_api.buscar_tarefa(item["task_id"], config["CLICKUP_API_TOKEN"])
     responsaveis = clickup_api.extrair_responsaveis(tarefa)
-    solicitante = clickup_api.extrair_solicitante(tarefa)
+    solicitantes = clickup_api.extrair_solicitantes(tarefa)
     responsaveis_ids = [responsavel["id"] for responsavel in responsaveis]
-    solicitante_id = solicitante["id"] if solicitante else None
-    metadados = _metadados_da_tarefa(tarefa, responsaveis, solicitante, item["task_id"])
+    solicitantes_ids = [solicitante["id"] for solicitante in solicitantes]
+    metadados = _metadados_da_tarefa(tarefa, responsaveis, solicitantes, item["task_id"])
 
     if item["tipo_evento"] == "taskAssigneeUpdated":
         pessoas_antes = _extrair_pessoas(item["before"])
@@ -83,19 +83,17 @@ def resolver_contexto_evento(item: dict, config) -> tuple[list[dict], dict[int, 
             responsaveis_ids_antes=[pessoa["id"] for pessoa in pessoas_antes],
             responsaveis_ids_depois=[pessoa["id"] for pessoa in pessoas_depois],
         )
-        pessoas_conhecidas = _mapa_pessoas(
-            pessoas_antes + pessoas_depois + responsaveis + ([solicitante] if solicitante else [])
-        )
+        pessoas_conhecidas = _mapa_pessoas(pessoas_antes + pessoas_depois + responsaveis + solicitantes)
         return destinatarios, pessoas_conhecidas, metadados
 
-    pessoas_conhecidas = _mapa_pessoas(responsaveis + ([solicitante] if solicitante else []))
+    pessoas_conhecidas = _mapa_pessoas(responsaveis + solicitantes)
 
     if item["tipo_evento"] == "taskCreated":
-        destinatarios = regras.resolver_destinatarios_criacao(solicitante_id, responsaveis_ids)
+        destinatarios = regras.resolver_destinatarios_criacao(solicitantes_ids, responsaveis_ids)
         return destinatarios, pessoas_conhecidas, metadados
 
     destinatarios = regras.resolver_destinatarios_envolvidos(
-        item["autor_id"], solicitante_id, responsaveis_ids
+        item["autor_id"], solicitantes_ids, responsaveis_ids
     )
     return destinatarios, pessoas_conhecidas, metadados
 

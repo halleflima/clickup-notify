@@ -15,11 +15,13 @@ EVENTOS_SUPORTADOS = {
 
 
 def resolver_destinatarios_criacao(
-    solicitante_id: int | None, responsaveis_ids: list[int]
+    solicitantes_ids: list[int], responsaveis_ids: list[int]
 ) -> list[dict]:
-    destinatarios = []
-    if solicitante_id is not None:
-        destinatarios.append({"clickup_user_id": solicitante_id, "papel": "solicitante"})
+    """Notifica TODOS os solicitantes (um chamado pode ter mais de um, ver
+    ADR-0012), nao so o primeiro."""
+    destinatarios = [
+        {"clickup_user_id": sid, "papel": "solicitante"} for sid in solicitantes_ids
+    ]
     destinatarios += [
         {"clickup_user_id": rid, "papel": "responsavel"} for rid in responsaveis_ids
     ]
@@ -27,13 +29,12 @@ def resolver_destinatarios_criacao(
 
 
 def resolver_destinatarios_envolvidos(
-    autor_id: int, solicitante_id: int | None, responsaveis_ids: list[int]
+    autor_id: int, solicitantes_ids: list[int], responsaveis_ids: list[int]
 ) -> list[dict]:
     """Usado por comentario e mudanca de status: notifica responsaveis e
-    solicitante, exceto quem executou a propria acao."""
+    todos os solicitantes, exceto quem executou a propria acao."""
     envolvidos_ids = set(responsaveis_ids)
-    if solicitante_id is not None:
-        envolvidos_ids.add(solicitante_id)
+    envolvidos_ids.update(solicitantes_ids)
     envolvidos_ids.discard(autor_id)
 
     return [{"clickup_user_id": uid, "papel": "envolvido"} for uid in envolvidos_ids]
