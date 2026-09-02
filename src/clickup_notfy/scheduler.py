@@ -75,6 +75,30 @@ def verificar_saude_webhook(config) -> None:
     if fail_count < limite and status != 'suspended':
         return
 
+    reativado = False
+    if status == 'suspended':
+        try:
+            clickup_api.reativar_webhook(webhook_id, config['CLICKUP_API_TOKEN'])
+            reativado = True
+        except Exception:
+            logger.exception('Falha ao tentar reativar webhook %s suspenso', webhook_id)
+
+    if reativado:
+        mensagem = (
+            f'O webhook do ClickUp Notify estava suspenso (status "suspended", {fail_count} '
+            f'falhas de entrega registradas) e foi REATIVADO AUTOMATICAMENTE agora. O servico '
+            f'de notificacoes ja deve estar recebendo eventos normalmente de novo - mas vale '
+            f'investigar a causa raiz das falhas (ex: instabilidade do tunel/proxy usado), ja '
+            f'que pode voltar a acontecer.'
+        )
+    else:
+        mensagem = (
+            f'O webhook do ClickUp Notify esta com status "{status}" e {fail_count} '
+            f'falhas de entrega registradas. Se atingir o limite, o ClickUp suspende o '
+            f'webhook automaticamente e nenhum evento novo chega ate ser reativado '
+            f'manualmente (PUT /v2/webhook/{{id}} com status=active).'
+        )
+
     conexao = db.conectar(config['DATABASE_PATH'])
     try:
         alerta_operacional.enviar_alerta_operacional(
@@ -82,12 +106,7 @@ def verificar_saude_webhook(config) -> None:
             config,
             tipo='webhook_degradado',
             assunto='[ClickUp Notify] Webhook do ClickUp perto do limite de falhas',
-            mensagem=(
-                f'O webhook do ClickUp Notify esta com status "{status}" e {fail_count} '
-                f'falhas de entrega registradas. Se atingir o limite, o ClickUp suspende o '
-                f'webhook automaticamente e nenhum evento novo chega ate ser reativado '
-                f'manualmente (PUT /v2/webhook/{{id}} com status=active).'
-            ),
+            mensagem=mensagem,
         )
     finally:
         conexao.close()

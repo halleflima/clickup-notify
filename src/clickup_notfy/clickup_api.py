@@ -103,3 +103,20 @@ def buscar_saude_webhook(team_id: str, webhook_id: str, token: str) -> dict | No
         if webhook.get('id') == webhook_id:
             return webhook.get('health')
     return None
+
+
+def reativar_webhook(webhook_id: str, token: str) -> None:
+    """Reativa um webhook suspenso pelo ClickUp (health.status == 'suspended')
+    de volta pra 'active', zerando o fail_count do lado do ClickUp.
+
+    Usado pelo scheduler (ADR-0011) pra restabelecer o servico sozinho
+    quando detecta suspensao, sem depender de alguem ver o alerta e agir
+    manualmente primeiro.
+    """
+    resposta = requests.put(
+        f'{BASE_URL}/webhook/{webhook_id}',
+        headers={'Authorization': token, 'Content-Type': 'application/json'},
+        json={'status': 'active'},
+        timeout=10,
+    )
+    resposta.raise_for_status()
