@@ -85,3 +85,23 @@ def extrair_descricao(tarefa: dict) -> str | None:
 
 def extrair_nome_tarefa(tarefa: dict) -> str | None:
     return tarefa.get("name")
+
+
+def buscar_saude_webhook(team_id: str, webhook_id: str, token: str) -> dict | None:
+    """Consulta a saude (status/fail_count) de um webhook especifico do
+    workspace. Usado pelo scheduler (ADR-0011) pra alertar antes do
+    ClickUp suspender o webhook por excesso de falhas de entrega.
+
+    Retorna None se o webhook_id nao for encontrado na listagem (ex: foi
+    apagado/recriado com outro ID e a config nao foi atualizada).
+    """
+    resposta = requests.get(
+        f'{BASE_URL}/team/{team_id}/webhook',
+        headers={'Authorization': token},
+        timeout=10,
+    )
+    resposta.raise_for_status()
+    for webhook in resposta.json().get('webhooks', []):
+        if webhook.get('id') == webhook_id:
+            return webhook.get('health')
+    return None

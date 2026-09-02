@@ -1,6 +1,7 @@
 import responses
 
 from clickup_notfy.clickup_api import (
+    buscar_saude_webhook,
     buscar_tarefa,
     extrair_descricao,
     extrair_nome_tarefa,
@@ -158,3 +159,36 @@ def test_extrair_descricao_ausente_retorna_none():
 
 def test_extrair_nome_tarefa():
     assert extrair_nome_tarefa({"name": "Erro ao gerar boleto"}) == "Erro ao gerar boleto"
+
+
+@responses.activate
+def test_buscar_saude_webhook_encontra_pelo_id():
+    responses.add(
+        responses.GET,
+        "https://api.clickup.com/api/v2/team/9007177246/webhook",
+        json={
+            "webhooks": [
+                {"id": "outro-webhook", "health": {"status": "active", "fail_count": 0}},
+                {"id": "cc6e40b3", "health": {"status": "suspended", "fail_count": 101}},
+            ]
+        },
+        status=200,
+    )
+
+    saude = buscar_saude_webhook("9007177246", "cc6e40b3", token="pk_teste")
+
+    assert saude == {"status": "suspended", "fail_count": 101}
+
+
+@responses.activate
+def test_buscar_saude_webhook_retorna_none_se_id_nao_encontrado():
+    responses.add(
+        responses.GET,
+        "https://api.clickup.com/api/v2/team/9007177246/webhook",
+        json={"webhooks": [{"id": "outro-webhook", "health": {"status": "active", "fail_count": 0}}]},
+        status=200,
+    )
+
+    saude = buscar_saude_webhook("9007177246", "webhook-inexistente", token="pk_teste")
+
+    assert saude is None

@@ -1,0 +1,60 @@
+"""Alerta operacional para quem administra o servico (ADR-0011).
+
+Distinto do FALLBACK_EMAIL (ADR-0004): FALLBACK_EMAIL e o destino de uma
+notificacao NORMAL de chamado quando falta mapeamento de destinatario -
+continua existindo e funcionando exatamente como antes, sem mudanca aqui.
+
+Este modulo e sobre avisar que o PROPRIO SERVICO pode estar com problema
+(falha nao tratada ao processar um evento, ou o webhook do ClickUp perto do
+limite de falhas que leva a suspensao automatica) - para uma lista separada
+e configuravel de destinatarios (EMAILS_ALERTA_OPERACIONAL).
+"""
+
+import html
+import logging
+
+from clickup_notfy.notificacoes import alerta_repository, email_sender
+
+logger = logging.getLogger(__name__)
+
+JANELA_COOLDOWN_MINUTOS = 6 * 60
+
+
+def _lista_emails(config) -> list[str]:
+    bruto = config.get('EMAILS_ALERTA_OPERACIONAL') or ''
+    return [email.strip() for email in bruto.split(',') if email.strip()]
+
+
+def enviar_alerta_operacional(conexao, config, tipo: str, assunto: str, mensagem: str) -> bool:
+    """Envia o alerta pra cada email configurado em EMAILS_ALERTA_OPERACIONAL.
+
+    Respeita um cooldown por 'tipo' (JANELA_COOLDOWN_MINUTOS) pra nao
+    floodar a caixa de entrada se o mesmo problema persistir por muitas
+    execucoes do scheduler ou muitos eventos seguidos - continua sendo
+    reenviado periodicamente enquanto o problema nao for corrigido, so nao
+    a cada ocorrencia individual.
+
+    Melhor esforco: uma falha ao enviar o alerta em si vira so um log,
+    nunca propaga - avisar sobre um problema nao pode, por si so, causar
+    outro (ex: derrubar a resposta do webhook por causa do envio do alerta).
+
+    Retorna True se ao menos tentou enviar (nao suprimido por cooldown ou
+    por lista vazia) - usado nos testes, sem efeito no chamador real.
+    """
+    destinatarios = _lista_emails(config)
+    if not destinatarios:
+        return False
+
+    if alerta_repository.houve_alerta_recente(conexao, tipo, JANELA_COOLDOWN_MINUTOS):
+        logger.info('Alerta operacional (%s) suprimido por cooldown', tipo)
+        return False
+
+    corpo_html = f'<pre style="font-family: monospace; white-space: pre-wrap;">{html.escape(mensagem)}</pre>'
+    for destinatario in destinatarios:
+        try:
+            email_sender.tentar_enviar(config, destinatario, assunto, corpo_html)
+        except Exception:
+            logger.exception('Falha ao enviar alerta operacional (%s) para %s', tipo, destinatario)
+
+    alerta_repository.registrar_alerta(conexao, tipo)
+    return True

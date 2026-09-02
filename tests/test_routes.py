@@ -16,6 +16,7 @@ class ConfigDeTeste(Config):
     CLICKUP_WEBHOOK_SECRET = SECRET
     CLICKUP_API_TOKEN = "pk_teste"
     FALLBACK_EMAIL = "fallback@empresa.com"
+    EMAILS_ALERTA_OPERACIONAL = "admin@empresa.com"
 
 
 def assinar(corpo: bytes) -> str:
@@ -133,3 +134,33 @@ def test_evento_de_tipo_nao_suportado_e_aceito_e_ignorado(client):
         )
 
     assert resposta.status_code == 200
+
+
+@responses.activate
+def test_falha_ao_processar_evento_dispara_alerta_operacional(client, monkeypatch):
+    alertas_enviados = []
+    monkeypatch.setattr(
+        'clickup_notfy.webhook.routes.alerta_operacional.email_sender.tentar_enviar',
+        lambda config, destinatario, assunto, corpo: alertas_enviados.append(
+            (destinatario, assunto, corpo)
+        )
+        or True,
+    )
+    responses.add(
+        responses.GET,
+        'https://api.clickup.com/api/v2/task/abc123',
+        status=500,
+    )
+    corpo_webhook = payload_bruto(evento_id='hist-falha-alerta')
+    headers = {'X-Signature': assinar(corpo_webhook)}
+
+    resposta = client.post(
+        '/webhooks/clickup', data=corpo_webhook, content_type='application/json', headers=headers
+    )
+
+    assert resposta.status_code == 502
+    assert len(alertas_enviados) == 1
+    destinatario, assunto, corpo_alerta = alertas_enviados[0]
+    assert destinatario == 'admin@empresa.com'
+    assert 'ClickUp Notify' in assunto
+    assert 'hist-falha-alerta' in corpo_alerta
