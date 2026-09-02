@@ -1,3 +1,5 @@
+import json
+
 import pytest
 import responses
 
@@ -155,13 +157,17 @@ def test_verificar_saude_webhook_abaixo_do_limite_nao_alerta(conexao, monkeypatc
 
 
 @responses.activate
-def test_verificar_saude_webhook_no_limite_dispara_alerta(conexao, monkeypatch):
+def test_verificar_saude_webhook_no_limite_mas_nao_suspenso_nao_reativa(conexao, monkeypatch):
+    """status 'failing' (nao 'suspended') mesmo acima do limite so alerta,
+    nao tenta reativar - nao tem nada suspenso pra reativar. Se o codigo
+    tentasse chamar o PUT de reativacao aqui, o teste falharia por causa
+    da chamada HTTP nao mockada (responses.activate bloqueia por padrao)."""
     chamadas = []
     monkeypatch.setattr(
         'clickup_notfy.scheduler.alerta_operacional.email_sender.tentar_enviar',
         lambda *a, **k: chamadas.append(1) or True,
     )
-    _mockar_saude_webhook(status='active', fail_count=25)
+    _mockar_saude_webhook(status='failing', fail_count=25)
 
     verificar_saude_webhook(dict(CONFIG_SAUDE, DATABASE_PATH=conexao, LIMITE_FAIL_COUNT_ALERTA=20))
 
@@ -169,17 +175,50 @@ def test_verificar_saude_webhook_no_limite_dispara_alerta(conexao, monkeypatch):
 
 
 @responses.activate
-def test_verificar_saude_webhook_suspenso_dispara_alerta_mesmo_com_fail_count_baixo(conexao, monkeypatch):
-    chamadas = []
+def test_verificar_saude_webhook_suspenso_reativa_automaticamente(conexao, monkeypatch):
+    corpos_enviados = []
     monkeypatch.setattr(
         'clickup_notfy.scheduler.alerta_operacional.email_sender.tentar_enviar',
-        lambda *a, **k: chamadas.append(1) or True,
+        lambda config, destinatario, assunto, corpo: corpos_enviados.append(corpo) or True,
     )
     _mockar_saude_webhook(status='suspended', fail_count=5)
+    responses.add(
+        responses.PUT,
+        'https://api.clickup.com/api/v2/webhook/cc6e40b3',
+        json={'webhook': {'health': {'status': 'active'}}},
+        status=200,
+    )
 
     verificar_saude_webhook(dict(CONFIG_SAUDE, DATABASE_PATH=conexao, LIMITE_FAIL_COUNT_ALERTA=20))
 
-    assert len(chamadas) == 1
+    assert len(corpos_enviados) == 1
+    assert 'REATIVADO AUTOMATICAMENTE' in corpos_enviados[0]
+    put_calls = [c for c in responses.calls if c.request.method == 'PUT']
+    assert len(put_calls) == 1
+    assert json.loads(put_calls[0].request.body) == {'status': 'active'}
+
+
+@responses.activate
+def test_verificar_saude_webhook_suspenso_reativacao_falha_ainda_alerta(conexao, monkeypatch):
+    """Se a tentativa de reativar der erro (ex: ClickUp fora do ar), o
+    alerta ainda e enviado - so sem afirmar que foi reativado."""
+    corpos_enviados = []
+    monkeypatch.setattr(
+        'clickup_notfy.scheduler.alerta_operacional.email_sender.tentar_enviar',
+        lambda config, destinatario, assunto, corpo: corpos_enviados.append(corpo) or True,
+    )
+    _mockar_saude_webhook(status='suspended', fail_count=5)
+    responses.add(
+        responses.PUT,
+        'https://api.clickup.com/api/v2/webhook/cc6e40b3',
+        json={'err': 'internal error'},
+        status=500,
+    )
+
+    verificar_saude_webhook(dict(CONFIG_SAUDE, DATABASE_PATH=conexao, LIMITE_FAIL_COUNT_ALERTA=20))
+
+    assert len(corpos_enviados) == 1
+    assert 'REATIVADO AUTOMATICAMENTE' not in corpos_enviados[0]
 
 
 @responses.activate

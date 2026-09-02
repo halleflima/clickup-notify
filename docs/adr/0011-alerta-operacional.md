@@ -44,4 +44,21 @@ Texto simples (não usa o template HTML do ADR-0009, que é para notificação d
 - Novas variáveis de ambiente (`EMAILS_ALERTA_OPERACIONAL`, `CLICKUP_TEAM_ID`, `CLICKUP_WEBHOOK_ID`, `LIMITE_FAIL_COUNT_ALERTA`) são todas opcionais - o serviço continua funcionando sem elas configuradas, só sem esse recurso.
 - Novo job no scheduler (5 minutos → 15 minutos de intervalo) adiciona uma chamada periódica à API do ClickUp; volume desprezível frente ao limite de rate da API.
 - O limite de `fail_count` sendo uma estimativa (não documentado oficialmente pelo ClickUp) é uma fragilidade conhecida - fica configurável via variável de ambiente exatamente por isso.
-- Não cobre ainda o caso de detectar quando o problema foi resolvido (ex: enviar um voltou ao normal) - fica em aberto para uma extensão futura, se a necessidade justificar.
+- Não cobre ainda o caso de detectar quando o problema foi resolvido (ex: enviar um "voltou ao normal") - fica em aberto para uma extensão futura, se a necessidade justificar.
+
+## Revisado: reativação automática do webhook suspenso
+
+**Contexto da revisão**: no primeiro dia em produção com esse alerta ativo, o gatilho 2 disparou de verdade (`fail_count` chegou a 24) por instabilidade do túnel usado para expor o serviço publicamente (túnel gratuito, sem garantia de uptime - ver ADR-0010), não por bug na aplicação. Ficou claro que só *avisar* não bastava: entre o alerta chegar e alguém ler o email e rodar manualmente `PUT /v2/webhook/{id}` com `status=active`, o serviço fica cego a eventos novos por um tempo indefinido - o problema já tinha acontecido antes (suspensão em `fail_count=101`) e o processo de reativação foi 100% manual nas duas vezes.
+
+**Decisão**: quando `verificar_saude_webhook` detecta `status == "suspended"` (não apenas "perto do limite"), o serviço tenta reativar sozinho via `clickup_api.reativar_webhook` (o mesmo `PUT /v2/webhook/{id}` com `status=active` que era feito manualmente) **antes** de mandar o alerta. O alerta é enviado de qualquer forma, mas o texto muda pra deixar claro o que aconteceu:
+- Se a reativação deu certo: avisa que já foi **reativado automaticamente** e que o serviço já deve estar recebendo eventos de novo - mas ainda pede pra investigar a causa raiz (a suspensão volta a acontecer se o motivo de fundo, ex: instabilidade do túnel, não for resolvido).
+- Se a reativação falhar (ex: ClickUp fora do ar naquele momento): o alerta cai de volta pro texto original, pedindo ação manual - a tentativa automática nunca é a única linha de defesa.
+
+**Por que só reativar quando `suspended` (não quando só `fail_count` alto)**: reativar um webhook que já está `active` não faz mal (é idempotente), mas também não faz sentido chamar isso repetidamente sem necessidade - só há algo pra "reativar" de fato quando o ClickUp já suspendeu.
+
+**Sem cooldown adicional na tentativa de reativação em si** (diferente do alerta, que tem cooldown de 6h) - se o job rodar de novo em 15 minutos e o webhook continuar suspenso (ex: reativou mas suspendeu de novo rápido por causa raiz não resolvida), tentar reativar de novo é seguro e desejável; é o *alerta* que fica limitado a 1 a cada 6h pra não virar spam, não a ação corretiva.
+
+### Consequências da revisão
+- Na maioria dos casos de suspensão por instabilidade transitória (o cenário real observado), o serviço se autorrecupera dentro de até 15 minutos, sem depender de alguém estar de plantão lendo email.
+- Continua exigindo atenção humana pra causa raiz - a reativação automática trata o sintoma (webhook suspenso), não o motivo (ex: túnel instável), que pode voltar a causar suspensão repetidamente até ser resolvido de verdade.
+- `clickup_api.reativar_webhook` reusa o mesmo padrão de erro dos outros clients desse módulo (`raise_for_status`, propaga `HTTPError`) - a chamada em `scheduler.py` está dentro de um `try/except Exception` best-effort, mesma filosofia do resto do ADR.

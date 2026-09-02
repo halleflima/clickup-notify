@@ -1,3 +1,7 @@
+import json
+
+import pytest
+import requests
 import responses
 
 from clickup_notfy.clickup_api import (
@@ -11,6 +15,7 @@ from clickup_notfy.clickup_api import (
     extrair_solicitantes,
     extrair_solicitantes_ids,
     extrair_status_atual,
+    reativar_webhook,
 )
 
 
@@ -227,3 +232,31 @@ def test_buscar_saude_webhook_retorna_none_se_id_nao_encontrado():
     saude = buscar_saude_webhook("9007177246", "webhook-inexistente", token="pk_teste")
 
     assert saude is None
+
+
+@responses.activate
+def test_reativar_webhook_envia_status_active():
+    responses.add(
+        responses.PUT,
+        "https://api.clickup.com/api/v2/webhook/cc6e40b3-a76e-4d13-ab79-647106ddad99",
+        json={"id": "cc6e40b3-a76e-4d13-ab79-647106ddad99", "webhook": {"health": {"status": "active"}}},
+        status=200,
+    )
+
+    reativar_webhook("cc6e40b3-a76e-4d13-ab79-647106ddad99", token="pk_teste")
+
+    assert responses.calls[0].request.headers["Authorization"] == "pk_teste"
+    assert json.loads(responses.calls[0].request.body) == {"status": "active"}
+
+
+@responses.activate
+def test_reativar_webhook_propaga_erro_http():
+    responses.add(
+        responses.PUT,
+        "https://api.clickup.com/api/v2/webhook/webhook-invalido",
+        json={"err": "Webhook not found"},
+        status=404,
+    )
+
+    with pytest.raises(requests.HTTPError):
+        reativar_webhook("webhook-invalido", token="pk_teste")
