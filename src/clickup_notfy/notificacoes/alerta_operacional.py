@@ -34,12 +34,25 @@ def enviar_alerta_operacional(conexao, config, tipo: str, assunto: str, mensagem
     reenviado periodicamente enquanto o problema nao for corrigido, so nao
     a cada ocorrencia individual.
 
-    Melhor esforco: uma falha ao enviar o alerta em si vira so um log,
-    nunca propaga - avisar sobre um problema nao pode, por si so, causar
-    outro (ex: derrubar a resposta do webhook por causa do envio do alerta).
+    Melhor esforco na entrega em si: uma falha ao enviar pra um destinatario
+    especifico (exception nao tratada por tentar_enviar) vira so um log e
+    nao impede tentar os demais - avisar sobre um problema nao pode, por si
+    so, causar outro (ex: derrubar a resposta do webhook por causa do envio
+    do alerta).
 
-    Retorna True se ao menos tentou enviar (nao suprimido por cooldown ou
-    por lista vazia) - usado nos testes, sem efeito no chamador real.
+    MAS o cooldown so e armado (`registrar_alerta`) se pelo menos um envio
+    realmente teve sucesso (`tentar_enviar` retornou True) - confirmado em
+    producao: sem essa checagem, uma falha de SMTP (ex: timeout de rede)
+    fazia `tentar_enviar` devolver False silenciosamente, e o alerta era
+    marcado como "enviado" mesmo sem ninguem ter recebido nada, travando
+    6h de silencio real com o problema original ainda ativo. Se ninguem
+    recebeu de fato, a proxima execucao do scheduler tenta de novo antes
+    (sem esperar o cooldown), o que e o comportamento certo quando a
+    entrega falhou de verdade.
+
+    Retorna True se pelo menos um destinatario recebeu o alerta com
+    sucesso; False se foi suprimido por cooldown, lista vazia, ou todas as
+    tentativas de envio falharam.
     """
     destinatarios = _lista_emails(config)
     if not destinatarios:
@@ -50,11 +63,23 @@ def enviar_alerta_operacional(conexao, config, tipo: str, assunto: str, mensagem
         return False
 
     corpo_html = f'<pre style="font-family: monospace; white-space: pre-wrap;">{html.escape(mensagem)}</pre>'
+    sucesso_algum = False
     for destinatario in destinatarios:
         try:
-            email_sender.tentar_enviar(config, destinatario, assunto, corpo_html)
+            if email_sender.tentar_enviar(config, destinatario, assunto, corpo_html):
+                sucesso_algum = True
+            else:
+                logger.warning('Alerta operacional (%s) nao entregue para %s', tipo, destinatario)
         except Exception:
             logger.exception('Falha ao enviar alerta operacional (%s) para %s', tipo, destinatario)
+
+    if not sucesso_algum:
+        logger.warning(
+            'Alerta operacional (%s) falhou para todos os destinatarios - cooldown NAO armado, '
+            'proxima verificacao tenta de novo',
+            tipo,
+        )
+        return False
 
     alerta_repository.registrar_alerta(conexao, tipo)
     return True
